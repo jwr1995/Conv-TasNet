@@ -7,6 +7,7 @@ import argparse
 import os
 
 import librosa
+import soundfile as sf
 import torch
 
 from data import EvalDataLoader, EvalDataset
@@ -40,7 +41,8 @@ def separate(args):
     model = ConvTasNet.load_model(args.model_path)
     print(model)
     model.eval()
-    if args.use_cuda:
+    if True:
+    #if args.use_cuda:
         model.cuda()
 
     # Load data
@@ -51,13 +53,16 @@ def separate(args):
     os.makedirs(args.out_dir, exist_ok=True)
 
     def write(inputs, filename, sr=args.sample_rate):
-        librosa.output.write_wav(filename, inputs, sr)# norm=True)
+        #librosa.output.write_wav(filename, inputs, sr)# norm=True)
+        sf.write(filename, inputs, sr, 'PCM_16')
+
 
     with torch.no_grad():
         for (i, data) in enumerate(eval_loader):
             # Get batch data
             mixture, mix_lengths, filenames = data
-            if args.use_cuda:
+            #if args.use_cuda:
+            if True:
                 mixture, mix_lengths = mixture.cuda(), mix_lengths.cuda()
             # Forward
             estimate_source = model(mixture)  # [B, C, T]
@@ -78,4 +83,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     separate(args)
-

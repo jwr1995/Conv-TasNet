@@ -41,7 +41,8 @@ def evaluate(args):
     model = ConvTasNet.load_model(args.model_path)
     print(model)
     model.eval()
-    if args.use_cuda:
+    #if args.use_cuda:
+    if True:
         model.cuda()
 
     # Load data
@@ -53,7 +54,8 @@ def evaluate(args):
         for i, (data) in enumerate(data_loader):
             # Get batch data
             padded_mixture, mixture_lengths, padded_source = data
-            if args.use_cuda:
+            #if args.use_cuda:
+            if True:
                 padded_mixture = padded_mixture.cuda()
                 mixture_lengths = mixture_lengths.cuda()
                 padded_source = padded_source.cuda()

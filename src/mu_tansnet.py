@@ -10,8 +10,8 @@ from utils import overlap_and_add
 EPS = 1e-8
 
 
-class ConvTasNet(nn.Module):
-    def __init__(self, N, L, B, H, P, X, R, C, norm_type="gLN", causal=False,
+class MuTansNet(nn.Module):
+    def __init__(self, N, L, B, H, P, X, R, C, M, norm_type="gLN", causal=False,
                  mask_nonlinear='relu'):
         """
         Args:
@@ -34,7 +34,7 @@ class ConvTasNet(nn.Module):
         self.causal = causal
         self.mask_nonlinear = mask_nonlinear
         # Components
-        self.encoder = Encoder(L, N)
+        self.encoder = Encoder2D(L, N, M)
         self.separator = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
         self.decoder = Decoder(N, L)
         # init
@@ -116,6 +116,28 @@ class Encoder(nn.Module):
         mixture_w = F.relu(self.conv1d_U(mixture))  # [M, N, K]
         return mixture_w
 
+class Encoder2D(nn.Module):
+    """Estimation of the nonnegative mixture weight by a 2-D conv layer.
+    """
+    def __init__(self, L, N, M):
+        super(Encoder, self).__init__()
+        # Hyper-parameter
+        self.L, self.N, self.M = L, N, M
+        # Components
+        # 50% overlap
+        # self.conv1d_U = nn.Conv1d(1, N, kernel_size=L, stride=L // 2, bias=False)
+        conv2d_U = nn.Conv2d(1, N, kernel_size=L, stride=L // 2, bias=False,padding=math.ceil(L/2-M/2))
+
+    def forward(self, mixture):
+        """
+        Args:
+            mixture: [B, T], B is batch size, T is #samples
+        Returns:
+            mixture_w: [B, N, K], where K = (T-L)/(L/2)+1 = 2T/L-1
+        """
+        mixture = torch.unsqueeze(mixture, 1)  # [B, 1, M, T]
+        mixture_w = F.relu(self.conv2d_U(mixture)).squeeze()  # [B, N, K]
+        return mixture_w
 
 class Decoder(nn.Module):
     def __init__(self, N, L):

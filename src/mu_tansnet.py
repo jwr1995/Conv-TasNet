@@ -23,6 +23,7 @@ class MuTansNet(nn.Module):
             X: Number of convolutional blocks in each repeat
             R: Number of repeats
             C: Number of speakers
+            M: Number of microphones
             norm_type: BN, gLN, cLN
             causal: causal or non-causal
             mask_nonlinear: use which non-linear function to generate mask
@@ -36,7 +37,7 @@ class MuTansNet(nn.Module):
         # Components
         self.encoder = Encoder2D(L, N, M)
         self.separator = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
-        self.decoder = Decoder(N, L)
+        self.decoder = MonoDecoder(N, L)
         # init
         for p in self.parameters():
             if p.dim() > 1:
@@ -45,9 +46,9 @@ class MuTansNet(nn.Module):
     def forward(self, mixture):
         """
         Args:
-            mixture: [M, T], M is batch size, T is #samples
+            mixture: [B, T], M is batch size, T is #samples
         Returns:
-            est_source: [M, C, T]
+            est_source: [B, C, T]
         """
         mixture_w = self.encoder(mixture)
         est_mask = self.separator(mixture_w)
@@ -139,6 +140,30 @@ class Encoder2D(nn.Module):
         mixture_w = F.relu(self.conv2d_U(mixture)).squeeze()  # [B, N, K]
         return mixture_w
 
+# class Decoder(nn.Module):
+#     def __init__(self, N, L):
+#         super(Decoder, self).__init__()
+#         # Hyper-parameter
+#         self.N, self.L = N, L
+#         # Components
+#         self.basis_signals = nn.Linear(N, L, bias=False)
+#
+#     def forward(self, mixture_w, est_mask):
+#         """
+#         Args:
+#             mixture_w: [M, N, K]
+#             est_mask: [M, C, N, K]
+#         Returns:
+#             est_source: [M, C, T]
+#         """
+#         # D = W * M
+#         source_w = torch.unsqueeze(mixture_w, 1) * est_mask  # [M, C, N, K]
+#         source_w = torch.transpose(source_w, 2, 3) # [M, C, K, N]
+#         # S = DV
+#         est_source = self.basis_signals(source_w)  # [M, C, K, L]
+#         est_source = overlap_and_add(est_source, self.L//2) # M x C x T
+#         return est_source
+
 class Decoder(nn.Module):
     def __init__(self, N, L):
         super(Decoder, self).__init__()
@@ -151,21 +176,20 @@ class Decoder(nn.Module):
         """
         Args:
             mixture_w: [M, N, K]
-            est_mask: [M, C, N, K]
+            est_mask: [M, N, K]
         Returns:
-            est_source: [M, C, T]
+            est_source: [M, T]
         """
         # D = W * M
-        source_w = torch.unsqueeze(mixture_w, 1) * est_mask  # [M, C, N, K]
-        source_w = torch.transpose(source_w, 2, 3) # [M, C, K, N]
+        source_w = torch.unsqueeze(mixture_w, 1) * est_mask  # [M N, K]
+        source_w = torch.transpose(source_w, 2, 3) # [M, K, N]
         # S = DV
         est_source = self.basis_signals(source_w)  # [M, C, K, L]
         est_source = overlap_and_add(est_source, self.L//2) # M x C x T
         return est_source
 
-
 class TemporalConvNet(nn.Module):
-    def __init__(self, N, B, H, P, X, R, C, norm_type="gLN", causal=False,
+    def __init__(self, N, B, H, P, X, R, norm_type="gLN", causal=False,
                  mask_nonlinear='relu'):
         """
         Args:
@@ -175,14 +199,12 @@ class TemporalConvNet(nn.Module):
             P: Kernel size in convolutional blocks
             X: Number of convolutional blocks in each repeat
             R: Number of repeats
-            C: Number of speakers
             norm_type: BN, gLN, cLN
             causal: causal or non-causal
             mask_nonlinear: use which non-linear function to generate mask
         """
         super(TemporalConvNet, self).__init__()
         # Hyper-parameter
-        self.C = C
         self.mask_nonlinear = mask_nonlinear
         # Components
         # [M, N, K] -> [M, N, K]
@@ -204,7 +226,7 @@ class TemporalConvNet(nn.Module):
             repeats += [nn.Sequential(*blocks)]
         temporal_conv_net = nn.Sequential(*repeats)
         # [M, B, K] -> [M, C*N, K]
-        mask_conv1x1 = nn.Conv1d(B, C*N, 1, bias=False)
+        mask_conv1x1 = nn.Conv1d(B, N, 1, bias=False)
         # Put together
         self.network = nn.Sequential(layer_norm,
                                      bottleneck_conv1x1,
@@ -217,11 +239,11 @@ class TemporalConvNet(nn.Module):
         Args:
             mixture_w: [M, N, K], M is batch size
         returns:
-            est_mask: [M, C, N, K]
+            est_mask: [M, N, K]
         """
         M, N, K = mixture_w.size()
         score = self.network(mixture_w)  # [M, N, K] -> [M, C*N, K]
-        score = score.view(M, self.C, N, K) # [M, C*N, K] -> [M, C, N, K]
+        #score = score.view(M, self.C, N, K) # [M, C*N, K] -> [M, C, N, K]
         if self.mask_nonlinear == 'softmax':
             est_mask = F.softmax(score, dim=1)
         elif self.mask_nonlinear == 'relu':

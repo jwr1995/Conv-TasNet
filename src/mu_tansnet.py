@@ -11,7 +11,7 @@ EPS = 1e-8
 
 
 class MuTansNet(nn.Module):
-    def __init__(self, N, L, B, H, P, X, R, C, M, norm_type="gLN", causal=False,
+    def __init__(self, N, L, B, H, P, X, R, C, norm_type="gLN", causal=False,
                  mask_nonlinear='relu'):
         """
         Args:
@@ -22,8 +22,7 @@ class MuTansNet(nn.Module):
             P: Kernel size in convolutional blocks
             X: Number of convolutional blocks in each repeat
             R: Number of repeats
-            C: Number of speakers
-            M: Number of microphones
+            C: Number of microphones/channels
             norm_type: BN, gLN, cLN
             causal: causal or non-causal
             mask_nonlinear: use which non-linear function to generate mask
@@ -36,7 +35,7 @@ class MuTansNet(nn.Module):
         self.mask_nonlinear = mask_nonlinear
         # Components
         self.encoder = Encoder2D(L, N, M)
-        self.separator = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
+        self.separator = TemporalConvNet(N, B, H, P, X, R, norm_type, causal, mask_nonlinear)
         self.decoder = MonoDecoder(N, L)
         # init
         for p in self.parameters():
@@ -46,9 +45,9 @@ class MuTansNet(nn.Module):
     def forward(self, mixture):
         """
         Args:
-            mixture: [B, T], M is batch size, T is #samples
+            mixture: [M, T], M is batch size, T is #samples
         Returns:
-            est_source: [B, C, T]
+            est_source: [M, T]
         """
         mixture_w = self.encoder(mixture)
         est_mask = self.separator(mixture_w)

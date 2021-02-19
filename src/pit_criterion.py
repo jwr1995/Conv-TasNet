@@ -125,7 +125,7 @@ if __name__ == "__main__":
     print('source', source)
     print('estimate_source', estimate_source)
     print('source_lengths', source_lengths)
-    
+
     loss, max_snr, estimate_source, reorder_estimate_source = cal_loss(source, estimate_source, source_lengths)
     print('loss', loss)
     print('max_snr', max_snr)

@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 
-import librosa
+import soundfile as sf
 
 
 def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000):
@@ -17,8 +17,11 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000):
         if not wav_file.endswith('.wav'):
             continue
         wav_path = os.path.join(in_dir, wav_file)
-        samples, _ = librosa.load(wav_path, sr=sample_rate)
-        file_infos.append((wav_path, len(samples)))
+        samples = sf.read(wav_path)[0]
+        for channel in range(samples.shape[1]):
+             # file path, num samples, num channels, channel idx
+            file_infos.append((wav_path, samples.shape[0],
+            samples.shape[1], channel))
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     with open(os.path.join(out_dir, out_filename + '.json'), 'w') as f:
@@ -26,34 +29,21 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000):
 
 
 def preprocess(args):
-    for data_type in ['tr', 'cv', 'tt']:
-        for speaker in ['mix', 's1', 's2']:
-            preprocess_one_dir(os.path.join(args.in_dir, data_type, speaker),
-                               os.path.join(args.out_dir, data_type),
-                               speaker,
-                               sample_rate=args.sample_rate)
-
-def preprocess_one_dir_chime3(in_dir, out_dir, out_filename, sample_rate=16000):
-    file_infos = []
-    in_dir = os.path.abspath(in_dir)
-    wav_list = os.listdir(in_dir)
-    for wav_file in wav_list:
-        if not wav_file.endswith('.wav'):
-            continue
-        wav_path = os.path.join(in_dir, wav_file)
-        samples, _ = librosa.load(wav_path, sr=sample_rate)
-        file_infos.append((wav_path, len(samples)))
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-    with open(os.path.join(out_dir, out_filename + '.json'), 'w') as f:
-        json.dump(file_infos, f, indent=4)
-
-def preprocess_chime3(args):
-    target_dict = {"mix":"isolated_6ch_track","s":"isolated_ext","v":"isolated_ext"}
-    sets = [set for filepath in glob.glob(os.path.join(args.in_dir,"isolated_ext","*_simu"))]
-    for set in sets:
-        for key, value in target_dict:
-            glob.glob()
+    print(args)
+    if args.corpus == 'wsj0':
+        for data_type in ['tr', 'cv', 'tt']:
+            for speaker in ['mix', 's1', 's2']:
+                preprocess_one_dir(os.path.join(args.in_dir, data_type, speaker),
+                                   os.path.join(args.out_dir, data_type),
+                                   speaker,
+                                   sample_rate=args.sample_rate)
+    elif args.corpus == 'cs21':
+        for data_type in ['train', 'dev', 'eval']:
+            for source in ['mix', 'nonreverb_ref']:
+                preprocess_one_dir(os.path.join(args.in_dir, data_type, args.array, source),
+                                   os.path.join(args.out_dir, data_type),
+                                   source,
+                                   sample_rate=args.sample_rate)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Corpus data preprocessing")
@@ -65,6 +55,9 @@ if __name__ == "__main__":
                         help='Sample rate of audio file')
     parser.add_argument('--denoising', type=bool, default=True,
                         help='Set Conv-TasNet to perform denoising')
+    parser.add_argument('--corpus', type=str, default="cs21",
+                        help='Set corpus')
+    parser.add_argument('--array', type=str, default='simu_non_uniform')
     args = parser.parse_args()
     print(args)
     preprocess(args)

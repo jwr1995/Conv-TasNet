@@ -21,6 +21,7 @@ Output:
 import json
 import math
 import os
+import soundfile as sf
 
 import numpy as np
 import torch
@@ -31,7 +32,7 @@ import librosa
 
 class AudioDataset(data.Dataset):
 
-    def __init__(self, json_dir, batch_size, sample_rate=8000, segment=4.0, cv_maxlen=8.0):
+    def __init__(self, json_dir, batch_size, args, sample_rate=8000, segment=4.0, cv_maxlen=8.0):
         """
         Args:
             json_dir: directory including mix.json, s1.json and s2.json
@@ -40,26 +41,33 @@ class AudioDataset(data.Dataset):
         xxx_infos is a list and each item is a tuple (wav_file, #samples)
         """
         super(AudioDataset, self).__init__()
-        mix_json = os.path.join(json_dir, 'mix.json')
-        s1_json = os.path.join(json_dir, 's1.json')
-        s2_json = os.path.join(json_dir, 's2.json')
+        if args.corpus == "cs21":
+            mix_json = os.path.join(json_dir, 'mix.json')
+            s1_json = os.path.join(json_dir, 'nonreverb_ref.json')
+        elif args.corpus == "wsj0":
+            mix_json = os.path.join(json_dir, 'mix.json')
+            s1_json = os.path.join(json_dir, 's1.json')
+            s2_json = os.path.join(json_dir, 's2.json')
         with open(mix_json, 'r') as f:
             mix_infos = json.load(f)
         with open(s1_json, 'r') as f:
             s1_infos = json.load(f)
-        with open(s2_json, 'r') as f:
-            s2_infos = json.load(f)
+        if args.C == 2:
+            with open(s2_json, 'r') as f:
+                s2_infos = json.load(f)
         # sort it by #samples (impl bucket)
         def sort(infos): return sorted(
             infos, key=lambda info: int(info[1]), reverse=True)
         sorted_mix_infos = sort(mix_infos)
         sorted_s1_infos = sort(s1_infos)
-        sorted_s2_infos = sort(s2_infos)
+
+        if args.C == 2:
+            sorted_s2_infos = sort(s2_infos)
         if segment >= 0.0:
             # segment length and count dropped utts
             segment_len = int(segment * sample_rate)  # 4s * 8000/s = 32000 samples
             drop_utt, drop_len = 0, 0
-            for _, sample in sorted_mix_infos:
+            for _, sample, cs, c in sorted_mix_infos:
                 if sample < segment_len:
                     drop_utt += 1
                     drop_len += sample
@@ -71,7 +79,10 @@ class AudioDataset(data.Dataset):
             while True:
                 num_segments = 0
                 end = start
-                part_mix, part_s1, part_s2 = [], [], []
+                if args.C == 1:
+                    part_mix, part_s1 = [], []
+                else:
+                    part_mix, part_s1, part_s2 = [], [], []
                 while num_segments < batch_size and end < len(sorted_mix_infos):
                     utt_len = int(sorted_mix_infos[end][1])
                     if utt_len >= segment_len:  # skip too short utt
@@ -83,10 +94,15 @@ class AudioDataset(data.Dataset):
                             break
                         part_mix.append(sorted_mix_infos[end])
                         part_s1.append(sorted_s1_infos[end])
-                        part_s2.append(sorted_s2_infos[end])
+                        if args.C==2:
+                            part_s2.append(sorted_s2_infos[end])
                     end += 1
                 if len(part_mix) > 0:
-                    minibatch.append([part_mix, part_s1, part_s2,
+                    if args.C==2:
+                        minibatch.append([part_mix, part_s1, part_s2,
+                                      sample_rate, segment_len])
+                    else:
+                        minibatch.append([part_mix, part_s1,
                                       sample_rate, segment_len])
                 if end == len(sorted_mix_infos):
                     break
@@ -102,9 +118,14 @@ class AudioDataset(data.Dataset):
                 if int(sorted_mix_infos[start][1]) > cv_maxlen * sample_rate:
                     start = end
                     continue
-                minibatch.append([sorted_mix_infos[start:end],
+                if args.C==2:
+                    minibatch.append([sorted_mix_infos[start:end],
                                   sorted_s1_infos[start:end],
                                   sorted_s2_infos[start:end],
+                                  sample_rate, segment])
+                else:
+                    minibatch.append([sorted_mix_infos[start:end],
+                                  sorted_s1_infos[start:end],
                                   sample_rate, segment])
                 if end == len(sorted_mix_infos):
                     break
@@ -139,6 +160,7 @@ def _collate_fn(batch):
     """
     # batch should be located in list
     assert len(batch) == 1
+
     mixtures, sources = load_mixtures_and_sources(batch[0])
 
     # get batch of lengths of input sequences
@@ -146,13 +168,18 @@ def _collate_fn(batch):
 
     # perform padding and convert to tensor
     pad_value = 0
+
+    #print(np.array(mixtures).shape,np.array(sources).shape)
     mixtures_pad = pad_list([torch.from_numpy(mix).float()
                              for mix in mixtures], pad_value)
     ilens = torch.from_numpy(ilens)
     sources_pad = pad_list([torch.from_numpy(s).float()
                             for s in sources], pad_value)
+    #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
     # N x T x C -> N x C x T
-    sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
+    #sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
+#    print(mixtures_pad.size(),ilens.size(),sources_pad.size())
+
     return mixtures_pad, ilens, sources_pad
 
 
@@ -243,19 +270,43 @@ def load_mixtures_and_sources(batch):
         T varies from item to item.
     """
     mixtures, sources = [], []
-    mix_infos, s1_infos, s2_infos, sample_rate, segment_len = batch
+    if len(batch) == 5:
+        C=2
+        mix_infos, s1_infos, s2_infos, sample_rate, segment_len = batch
+        zipped = zip(mix_infos, s1_infos, s2_infos)
+    else:
+        C=1
+        mix_infos, s1_infos, sample_rate, segment_len = batch
+        zipped = zip(mix_infos, s1_infos)
     # for each utterance
-    for mix_info, s1_info, s2_info in zip(mix_infos, s1_infos, s2_infos):
+
+    for packet in zipped:
+        if C==2:
+            mix_info, s1_info, s2_info = packet
+        else:
+            mix_info, s1_info = packet
+            channel=mix_info[-1]
+
         mix_path = mix_info[0]
         s1_path = s1_info[0]
-        s2_path = s2_info[0]
-        assert mix_info[1] == s1_info[1] and s1_info[1] == s2_info[1]
+        assert mix_info[1] == s1_info[1]
+        if C==2:
+            s2_path = s2_info[0]
+            assert s1_info[1] == s2_info[1]
         # read wav file
-        mix, _ = librosa.load(mix_path, sr=sample_rate)
-        s1, _ = librosa.load(s1_path, sr=sample_rate)
-        s2, _ = librosa.load(s2_path, sr=sample_rate)
+        #mix, _ = librosa.load(mix_path, sr=sample_rate)
+        #s1, _ = librosa.load(s1_path, sr=sample_rate)
+        mix = sf.read(mix_path)[0].T[channel]
+
+        s1 = sf.read(s1_path)[0].T[channel]
+        if C==2:
+            s2 = sf.read(s2_path)[0].T
+
         # merge s1 and s2
-        s = np.dstack((s1, s2))[0]  # T x C, C = 2
+        if C==2:
+            s = np.dstack((s1, s2))[0]  # T x C, C = 2
+        else:
+            s = np.dstack((s1))[0]
         utt_len = mix.shape[-1]
         if segment_len >= 0:
             # segment

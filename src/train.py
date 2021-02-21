@@ -21,7 +21,7 @@ parser.add_argument('--train_dir', type=str, default=None,
                     help='directory including mix.json, s1.json and s2.json')
 parser.add_argument('--valid_dir', type=str, default=None,
                     help='directory including mix.json, s1.json and s2.json')
-parser.add_argument('--sample_rate', default=8000, type=int,
+parser.add_argument('--sample_rate', default=16000, type=int,
                     help='Sample rate')
 parser.add_argument('--segment', default=4, type=float,
                     help='Segment length (seconds)')
@@ -42,7 +42,7 @@ parser.add_argument('--X', default=8, type=int,
                     help='Number of convolutional blocks in each repeat')
 parser.add_argument('--R', default=4, type=int,
                     help='Number of repeats')
-parser.add_argument('--C', default=2, type=int,
+parser.add_argument('--C', default=1, type=int,
                     help='Number of speakers')
 parser.add_argument('--norm_type', default='gLN', type=str,
                     choices=['gLN', 'cLN', 'BN'], help='Layer norm type')
@@ -96,14 +96,15 @@ parser.add_argument('--visdom_epoch', dest='visdom_epoch', type=int, default=0,
                     help='Turn on visdom graphing each epoch')
 parser.add_argument('--visdom_id', default='TasNet training',
                     help='Identifier for visdom run')
-
+parser.add_argument('--corpus',default='wsj0')
+parser.add_argument('--array',default='simu_non_linear')
 
 def main(args):
     # Construct Solver
     # data
-    tr_dataset = AudioDataset(args.train_dir, args.batch_size,
+    tr_dataset = AudioDataset(args.train_dir, args.batch_size, args=args,
                               sample_rate=args.sample_rate, segment=args.segment)
-    cv_dataset = AudioDataset(args.valid_dir, batch_size=1,  # 1 -> use less GPU memory to do cv
+    cv_dataset = AudioDataset(args.valid_dir, batch_size=1, args=args,  # 1 -> use less GPU memory to do cv
                               sample_rate=args.sample_rate,
                               segment=-1, cv_maxlen=args.cv_maxlen)  # -1 -> use full audio
     tr_loader = AudioDataLoader(tr_dataset, batch_size=1,
@@ -113,6 +114,7 @@ def main(args):
                                 num_workers=0)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model
+
     model = ConvTasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
                        args.C, norm_type=args.norm_type, causal=args.causal,
                        mask_nonlinear=args.mask_nonlinear)
@@ -143,4 +145,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     main(args)
-

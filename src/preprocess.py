@@ -5,14 +5,18 @@
 import argparse
 import json
 import os
+import random
+from itertools import  compress
 
 import soundfile as sf
 
 
-def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000):
+def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=None):
     file_infos = []
     in_dir = os.path.abspath(in_dir)
     wav_list = os.listdir(in_dir)
+    if not entries == None:
+        wav_list = list(compress(wav_list,entries))
     for wav_file in wav_list:
         if not wav_file.endswith('.wav'):
             continue
@@ -29,7 +33,6 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000):
 
 
 def preprocess(args):
-    print(args)
     if args.corpus == 'wsj0':
         for data_type in ['tr', 'cv', 'tt']:
             for speaker in ['mix', 's1', 's2']:
@@ -39,11 +42,13 @@ def preprocess(args):
                                    sample_rate=args.sample_rate)
     elif args.corpus == 'cs21':
         for data_type in ['train', 'dev', 'eval']:
+            num_files = len(os.listdir(os.path.abspath(os.path.join(args.in_dir, data_type, args.array, "mix"))))
+            entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
             for source in ['mix', 'nonreverb_ref']:
                 preprocess_one_dir(os.path.join(args.in_dir, data_type, args.array, source),
                                    os.path.join(args.out_dir, data_type),
                                    source,
-                                   sample_rate=args.sample_rate)
+                                   sample_rate=args.sample_rate, entries=entries)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Corpus data preprocessing")
@@ -58,6 +63,7 @@ if __name__ == "__main__":
     parser.add_argument('--corpus', type=str, default="cs21",
                         help='Set corpus')
     parser.add_argument('--array', type=str, default='simu_non_uniform')
+    parser.add_argument('--percentage', type=int, default=20)
     args = parser.parse_args()
     print(args)
     preprocess(args)

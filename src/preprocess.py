@@ -44,7 +44,7 @@ def preprocess(args):
         for data_type in ['train', 'dev', 'eval']:
             num_files = len(os.listdir(os.path.abspath(os.path.join(args.in_dir, data_type, args.array, "mix"))))
             entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
-            for source in ['mix', 'nonreverb_ref']:
+            for source in ['mix', 'noreverb_ref']:
                 preprocess_one_dir(os.path.join(args.in_dir, data_type, args.array, source),
                                    os.path.join(args.out_dir, data_type),
                                    source,

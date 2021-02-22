@@ -43,7 +43,7 @@ class AudioDataset(data.Dataset):
         super(AudioDataset, self).__init__()
         if args.corpus == "cs21":
             mix_json = os.path.join(json_dir, 'mix.json')
-            s1_json = os.path.join(json_dir, 'nonreverb_ref.json')
+            s1_json = os.path.join(json_dir, 'noreverb_ref.json')
         elif args.corpus == "wsj0":
             mix_json = os.path.join(json_dir, 'mix.json')
             s1_json = os.path.join(json_dir, 's1.json')

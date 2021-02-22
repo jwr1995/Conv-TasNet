@@ -6,6 +6,10 @@
 import argparse, glob, os
 
 import torch
+import torch.multiprocessing as mp
+import torch.distributed.autograd as dist_autograd
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed.optim import DistributedOptimizer
 
 from data import AudioDataLoader, AudioDataset
 from csdata import CSDataSet, DataConfiguration
@@ -14,7 +18,8 @@ from multitansnet import MultiTansNet, TansNet
 from conv_tasnet import ConvTasNet
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
-
+os.environ['MASTER_ADDR'] = 'localhost'
+os.environ['MASTER_PORT'] = '8888'
 parser = argparse.ArgumentParser(
     "Fully-Convolutional Time-domain Audio Separation Network (Conv-TasNet) "
     "with Permutation Invariant Training")
@@ -106,7 +111,7 @@ parser.add_argument('--channels', default='array',
                     help='Single channel = mono, single array = array or multiarray = multi')
 parser.add_argument('--corpus', default='cs21',
                     help='cs21 for ConferencingSpeech 2021, wsj0  for wsj0-2mix')
-def main(args):
+def train(gpu, args):
     # Construct Solver
     # data
     if args.channels == 'array':
@@ -138,7 +143,7 @@ def main(args):
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
 
     # model
-    device = torch.device("cuda:0" if torch.cuda.is_available() and args.use_cuda==1 else "cpu")
+    # device = torch.device("cuda:0" if torch.cuda.is_available() and args.use_cuda==1 else "cpu")
     model = MultiTansNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
                         norm_type=args.norm_type, causal=args.causal,
                        mask_nonlinear=args.mask_nonlinear)
@@ -147,11 +152,20 @@ def main(args):
         #               mask_nonlinear=args.mask_nonlinear)
 
     print(model)
-    if torch.cuda.device_count()>1:
-        model = model.to(torch.device('cuda:0')) 
-        print("Using", torch.cuda.device_count(), "GPUs.")
-        model = torch.nn.DataParallel(model, device_ids = range(torch.cuda.device_count()))
-    
+
+    print("GPU:",gpu)
+    torch.cuda.set_device(gpu)
+
+    #if torch.cuda.device_count()>1:
+    print("Model moving to cuda")
+    model.cuda(gpu)
+    #model = model.to(torch.device('cuda:0')) 
+
+    print("Using", torch.cuda.device_count(), "GPUs.")
+        #model = torch.nn.DataParallel(model, device_ids = range(torch.cuda.device_count()))
+    torch.distributed.init_process_group(backend='nccl',world_size=torch.cuda.device_count(), rank=1)
+    print("Started process group")
+    model = DDP(model, device_ids=[0,1,2,3])
     # optimizer
     if args.optimizer == 'sgd':
         optimizier = torch.optim.SGD(model.parameters(),
@@ -170,8 +184,11 @@ def main(args):
     solver = Solver(data, model, optimizier, args)
     solver.train()
 
+def main(args):
+    mp.spawn(train, args=(args,),nprocs=4,join=True)
 
 if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     main(args)
+    #main(args)

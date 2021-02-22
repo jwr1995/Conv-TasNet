@@ -33,7 +33,7 @@ parser.add_argument('--N', default=256, type=int,
 parser.add_argument('--L', default=20, type=int,
                     help='Length of the filters in samples (40=5ms at 8kHZ)')
 parser.add_argument('--B', default=256, type=int,
-                    help='Number of channels in bottleneck 1 × 1-conv block')
+                    help='Number of channels in bottleneck 1 x 1-conv block')
 parser.add_argument('--H', default=512, type=int,
                     help='Number of channels in convolutional blocks')
 parser.add_argument('--P', default=3, type=int,

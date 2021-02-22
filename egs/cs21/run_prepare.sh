@@ -4,8 +4,14 @@
 # Author: Kaituo XU
 # Adapted 2021/02
 # Author: William Ravenscroft
+source /share/mini1/usr/will/miniconda3/bin/activate
+conda init
+conda activate cs21
 
-data=/home/will/data/dummy/cs21
+#data=/home/will/data/dummy/cs21
+data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
+
+
 stage=1  # Modify this to control to start from which stage
 # -- END
 
@@ -16,7 +22,7 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=50 # percetnage of simulated sets to use
+percentage=10 # percetnage of simulated sets to use
 sample_rate=16000
 segment=6  # seconds
 cv_maxlen=6  # seconds

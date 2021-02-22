@@ -14,9 +14,20 @@ export train_cmd="run.pl --mem 2G"
 export cuda_cmd="run.pl --mem 2G --gpu 1"
 export decode_cmd="run.pl --mem 4G"
 
+#export train_cmd="queue.pl --mem 2G"
+#export decode_cmd="queue.pl --mem 4G"
+# the use of cuda_cmd is deprecated, used only in 'nnet1',
+#export cuda_cmd="queue.pl --mem 2G --gpu 1"
+
+
 # NPU setup
 #export train_cmd="queue.pl -q all.q --mem 2G"
 #export cuda_cmd="/home/work_nfs/common/tools/pyqueue_asr.pl --mem 2G --gpu 1"
 #export decode_cmd="/home/work_nfs/common/tools/pyqueue_asr.pl --mem 4G --gpu 1"
 #export cuda_cmd="queue.pl --mem 2G --gpu 1 --config conf/gpu.conf"
 #export decode_cmd="queue.pl -q all.q --mem 4G"
+
+# Custom setup for MINI grid
+#export train_cmd="submitjob -p MINI -q NORMAL -m 2000"
+#export cuda_cmd="submitjob -p MINI -q NORMAL -m 2000 -o -l hostname=\"node20|node23|node24|node25\" -eo"
+#export decode_cmd="submitjob -p MINI -q NORMAL -m 4000"

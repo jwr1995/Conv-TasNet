@@ -10,7 +10,7 @@ conda activate cs21
 
 #data=/home/will/data/dummy/cs21
 data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=1  # Modify this to control to start from which stage
+stage=2  # Modify this to control to start from which stage
 # -- END
 
 dumpdir=data  # directory to put generated json file

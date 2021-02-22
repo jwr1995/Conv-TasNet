@@ -6,13 +6,20 @@
 import argparse, glob, os
 
 import torch
+import torch.multiprocessing as mp
+import torch.distributed.autograd as dist_autograd
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed.optim import DistributedOptimizer
 
 from data import AudioDataLoader, AudioDataset
 from csdata import CSDataSet, DataConfiguration
 from solver import Solver
 from multitansnet import MultiTansNet, TansNet
+from conv_tasnet import ConvTasNet
 
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
+os.environ['MASTER_ADDR'] = 'localhost'
+os.environ['MASTER_PORT'] = '8888'
 parser = argparse.ArgumentParser(
     "Fully-Convolutional Time-domain Audio Separation Network (Conv-TasNet) "
     "with Permutation Invariant Training")
@@ -34,8 +41,8 @@ parser.add_argument('--N', default=256, type=int,
 parser.add_argument('--L', default=20, type=int,
                     help='Length of the filters in samples (40=5ms at 8kHZ)')
 parser.add_argument('--B', default=256, type=int,
-                    help='Number of channels in bottleneck 1 × 1-conv block')
-parser.add_argument('--H', default=512, type=int,
+                    help='Number of channels in bottleneck 1 x 1-conv block')
+parser.add_argument('--H', default=256, type=int,
                     help='Number of channels in convolutional blocks')
 parser.add_argument('--P', default=3, type=int,
                     help='Kernel size in convolutional blocks')
@@ -43,11 +50,11 @@ parser.add_argument('--X', default=4, type=int,
                     help='Number of convolutional blocks in each repeat')
 parser.add_argument('--R', default=2, type=int,
                     help='Number of repeats')
-parser.add_argument('--C', default=2, type=int,
+parser.add_argument('--C', default=1, type=int,
                     help='Number of speakers')
-parser.add_argument('--norm_type', default='gLN', type=str,
+parser.add_argument('--norm_type', default='BN', type=str,
                     choices=['gLN', 'cLN', 'BN'], help='Layer norm type')
-parser.add_argument('--causal', type=int, default=1,
+parser.add_argument('--causal', type=int, default=0,
                     help='Causal (1) or noncausal(0) training')
 parser.add_argument('--mask_nonlinear', default='relu', type=str,
                     choices=['relu', 'softmax'], help='non-linear to generate mask')
@@ -65,9 +72,9 @@ parser.add_argument('--max_norm', default=5, type=float,
 # minibatch
 parser.add_argument('--shuffle', default=0, type=int,
                     help='reshuffle the data at every epoch')
-parser.add_argument('--batch_size', default=1, type=int,
+parser.add_argument('--batch_size', default=8, type=int,
                     help='Batch size')
-parser.add_argument('--num_workers', default=1, type=int,
+parser.add_argument('--num_workers', default=4, type=int,
                     help='Number of workers to generate minibatch')
 # optimizer
 parser.add_argument('--optimizer', default='adam', type=str,
@@ -97,13 +104,14 @@ parser.add_argument('--visdom_epoch', dest='visdom_epoch', type=int, default=0,
                     help='Turn on visdom graphing each epoch')
 parser.add_argument('--visdom_id', default='TasNet training',
                     help='Identifier for visdom run')
-parser.add_argument('--datapath', default='/home/will/data/dummy/cs21',
-                    help='Path to tr and cv data')
+parser.add_argument('--datapath', default='/home/acp19jwr/mock/cs21', help='Path to tr and cv data')
+#parser.add_argument('--datapath', default='/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs',
+#                    help='Path to tr and cv data')
 parser.add_argument('--channels', default='array',
                     help='Single channel = mono, single array = array or multiarray = multi')
 parser.add_argument('--corpus', default='cs21',
                     help='cs21 for ConferencingSpeech 2021, wsj0  for wsj0-2mix')
-def main(args):
+def train(gpu, args):
     # Construct Solver
     # data
     if args.channels == 'array':
@@ -133,14 +141,31 @@ def main(args):
     # cv_loader = AudioDataLoader(cv_dataset, batch_size=1,
     #                             num_workers=0)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
+
     # model
-    model = TansNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
+    # device = torch.device("cuda:0" if torch.cuda.is_available() and args.use_cuda==1 else "cpu")
+    model = MultiTansNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
                         norm_type=args.norm_type, causal=args.causal,
                        mask_nonlinear=args.mask_nonlinear)
+   # model = ConvTasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
+    ##                   args.C, norm_type=args.norm_type, causal=args.causal,
+        #               mask_nonlinear=args.mask_nonlinear)
+
     print(model)
-    if args.use_cuda:
-        model = torch.nn.DataParallel(model)
-        model.cuda()
+
+    print("GPU:",gpu)
+    torch.cuda.set_device(gpu)
+
+    #if torch.cuda.device_count()>1:
+    print("Model moving to cuda")
+    model.cuda(gpu)
+    #model = model.to(torch.device('cuda:0')) 
+
+    print("Using", torch.cuda.device_count(), "GPUs.")
+        #model = torch.nn.DataParallel(model, device_ids = range(torch.cuda.device_count()))
+    torch.distributed.init_process_group(backend='nccl',world_size=torch.cuda.device_count(), rank=1)
+    print("Started process group")
+    model = DDP(model, device_ids=[0,1,2,3])
     # optimizer
     if args.optimizer == 'sgd':
         optimizier = torch.optim.SGD(model.parameters(),
@@ -159,8 +184,11 @@ def main(args):
     solver = Solver(data, model, optimizier, args)
     solver.train()
 
+def main(args):
+    mp.spawn(train, args=(args,),nprocs=4,join=True)
 
 if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     main(args)
+    #main(args)

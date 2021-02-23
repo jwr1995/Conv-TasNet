@@ -11,7 +11,7 @@ conda activate cs21
 #_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
 #data=/home/will/data/dummy/cs21
 data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=3  # Modify this to control to start from which stage
+stage=2  # Modify this to control to start from which stage
 # -- END
 
 dumpdir=data  # directory to put generated json file
@@ -21,7 +21,7 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=2
+percentage=100
 sample_rate=16000
 segment=6  # seconds
 cv_maxlen=6  # seconds
@@ -40,7 +40,7 @@ C=1
 # Training config
 use_cuda=1
 id=0,1,2,3
-epochs=1
+epochs=10
 half_lr=1
 early_stop=0
 max_norm=5

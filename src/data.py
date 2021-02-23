@@ -331,13 +331,15 @@ def load_mixtures(batch):
     """
     mixtures, filenames = [], []
     mix_infos, sample_rate = batch
+    if (len(mix_infos[0]))==4: C=1
+    else: C=None
     # for each utterance
     for mix_info in mix_infos:
         mix_path = mix_info[0]
-        channel = mix_info[-1]
         # read wav file
         if C == 1:
-            mix, _ = sf.read(mix_path)[0].T[channel]
+            channel = mix_info[-1]
+            mix = sf.read(mix_path)[0].T[channel]
         else:
             mix, _ = librosa.load(mix_path, sr=sample_rate)
         mixtures.append(mix)

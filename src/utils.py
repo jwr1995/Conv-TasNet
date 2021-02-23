@@ -4,6 +4,7 @@
 import math
 
 import torch
+import numpy as np
 
 
 def overlap_and_add(signal, frame_step):

@@ -9,9 +9,9 @@ conda init
 conda activate cs21
 #export LDLIBRARYPATH=/share/mini1/sw/std/cuda/
 #_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
-#data=/home/will/data/dummy/cs21
-data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=2  # Modify this to control to start from which stage
+data=/home/will/data/dummy/cs21
+#data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
+stage=4  # Modify this to control to start from which stage
 # -- END
 
 dumpdir=data  # directory to put generated json file
@@ -21,7 +21,7 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=100
+percentage=50
 sample_rate=16000
 segment=6  # seconds
 cv_maxlen=6  # seconds
@@ -90,6 +90,8 @@ else
   expdir=exp/train_${tag}
 fi
 
+cp run.sh $expdir/run.sh
+
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
   #${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
@@ -134,7 +136,6 @@ if [ $stage -le 2 ]; then
     --array $array
 fi
 
-
 if [ $stage -le 3 ]; then
   echo "Stage 3: Evaluate separation performance"
   ${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
@@ -147,13 +148,13 @@ if [ $stage -le 3 ]; then
     --batch_size $batch_size
 fi
 
-
+  #--model_path ${expdir}/final.pth.tar \
 if [ $stage -le 4 ]; then
   echo "Stage 4: Separate speech using Conv-TasNet"
   separate_out_dir=${expdir}/separate
   ${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
     separate.py \
-    --model_path ${expdir}/final.pth.tar \
+    --model_path /home/will/Projects/Conv-TasNet/egs/cs21/exp/train_r16000_N256_L70_B256_H512_P3_X8_R4_C1_gLN_causal0_relu_epoch10_half1_norm5_bs4_worker0_adam_lr1e-3_mmt0_l20_train/epoch15.pth.tar \
     --mix_json $separate_dir/mix.json \
     --out_dir ${separate_out_dir} \
     --use_cuda $ev_use_cuda \

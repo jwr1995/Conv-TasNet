@@ -32,7 +32,7 @@ import librosa
 
 class AudioDataset(data.Dataset):
 
-    def __init__(self, json_dir, batch_size, args, sample_rate=8000, segment=4.0, cv_maxlen=8.0):
+    def __init__(self, json_dir, batch_size, args=None, sample_rate=8000, segment=4.0, cv_maxlen=8.0, multi=False):
         """
         Args:
             json_dir: directory including mix.json, s1.json and s2.json
@@ -41,7 +41,8 @@ class AudioDataset(data.Dataset):
         xxx_infos is a list and each item is a tuple (wav_file, #samples)
         """
         super(AudioDataset, self).__init__()
-        if args.corpus == "cs21":
+        self.multi=multi
+        if  args.corpus == "cs21":
             mix_json = os.path.join(json_dir, 'mix.json')
             s1_json = os.path.join(json_dir, 'noreverb_ref.json')
         elif args.corpus == "wsj0":
@@ -147,6 +148,48 @@ class AudioDataLoader(data.DataLoader):
     def __init__(self, *args, **kwargs):
         super(AudioDataLoader, self).__init__(*args, **kwargs)
         self.collate_fn = _collate_fn
+
+class MultiAudioDataLoader(data.DataLoader):
+    """
+    NOTE: just use batchsize=1 here, so drop_last=True makes no sense here.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(AudioDataLoader, self).__init__(*args, **kwargs)
+        self.collate_fn = _collate_fn_multi
+
+def _collate_fn_multi(batch):
+    """
+    Args:
+        batch: list, len(batch) = 1. See AudioDataset.__getitem__()
+    Returns:
+        mixtures_pad: B x T, torch.Tensor
+        ilens : B, torch.Tentor
+        sources_pad: B x C x T, torch.Tensor
+    """
+    # batch should be located in list
+    assert len(batch) == 1
+
+    mixtures, sources = load_mixtures_and_sources(batch[0], True)
+
+    # get batch of lengths of input sequences
+    ilens = np.array([mix.shape[0] for mix in mixtures])
+
+    # perform padding and convert to tensor
+    pad_value = 0
+
+    #print(np.array(mixtures).shape,np.array(sources).shape)
+    mixtures_pad = pad_list([torch.from_numpy(mix).float()
+                             for mix in mixtures], pad_value)
+    ilens = torch.from_numpy(ilens)
+    sources_pad = pad_list([torch.from_numpy(s).float()
+                            for s in sources], pad_value)
+    #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
+    # N x T x C -> N x C x T
+    #sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
+#    print(mixtures_pad.size(),ilens.size(),sources_pad.size())
+
+    return mixtures_pad, ilens, sources_pad
 
 
 def _collate_fn(batch):
@@ -261,7 +304,7 @@ def _collate_fn_eval(batch):
 
 
 # ------------------------------ utils ------------------------------------
-def load_mixtures_and_sources(batch):
+def load_mixtures_and_sources(batch, multi=False):
     """
     Each info include wav path and wav duration.
     Returns:
@@ -296,9 +339,13 @@ def load_mixtures_and_sources(batch):
         # read wav file
         #mix, _ = librosa.load(mix_path, sr=sample_rate)
         #s1, _ = librosa.load(s1_path, sr=sample_rate)
-        mix = sf.read(mix_path)[0].T[channel]
-
-        s1 = sf.read(s1_path)[0].T[channel]
+        if multi == False:
+            mix = sf.read(mix_path)[0].T[channel]
+            s1 = sf.read(s1_path)[0].T[channel]
+        else:
+            mix = sf.read(mix_path)[0].T
+            s1 = sf.read(s1_path)[0].T
+            
         if C==2:
             s2 = sf.read(s2_path)[0].T
 
@@ -358,7 +405,7 @@ def pad_list(xs, pad_value):
 
 if __name__ == "__main__":
     import sys
-    json_dir, batch_size = sys.argv[1:3]
+    json_dir, batch_size = "exp/temp/mix.json",3
     dataset = AudioDataset(json_dir, int(batch_size))
     data_loader = AudioDataLoader(dataset, batch_size=1,
                                   num_workers=4)

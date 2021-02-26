@@ -2,29 +2,32 @@
 
 # Created on 2018/12
 # Author: Kaituo XU
-
-# -- START IMPORTANT
-# * If you have mixture wsj0 audio, modify `data` to your path that including tr, cv and tt.
-# * If you jsut have origin sphere format wsj0 , modify `wsj0_origin` to your path and
-# modify `wsj0_wav` to path that put output wav format wsj0, then read and run stage 1 part.
-# After that, modify `data` and run from stage 2.
-data=/home/will/data/asr/CHiME3/data/audio/16kHz/isolated
-stage=1  # Modify this to control to start from which stage
+# Adapted 2021/02
+# Author: William Ravenscroft
+source /share/mini1/usr/will/miniconda3/bin/activate
+conda init
+conda activate cs21
+#export LDLIBRARYPATH=/share/mini1/sw/std/cuda/
+#_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
+data=/home/will/data/dummy/cs21
+#data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
+stage=3  # Modify this to control to start from which stage
 # -- END
 
 dumpdir=data  # directory to put generated json file
 
 # -- START Conv-TasNet Config
-train_dir=$dumpdir/tr
-valid_dir=$dumpdir/cv
-evaluate_dir=$dumpdir/tt
-separate_dir=$dumpdir/tt
-sample_rate=8000
-segment=4  # seconds
+train_dir=$dumpdir/train
+valid_dir=$dumpdir/dev
+evaluate_dir=$dumpdir/eval
+separate_dir=$dumpdir/eval
+percentage=100
+sample_rate=16000
+segment=6  # seconds
 cv_maxlen=6  # seconds
 # Network config
 N=256
-L=20
+L=70
 B=256
 H=512
 P=3
@@ -33,18 +36,18 @@ R=4
 norm_type=gLN
 causal=0
 mask_nonlinear='relu'
-C=2
+C=1
 # Training config
 use_cuda=1
-id=0
-epochs=100
+id=0,1,2,3
+epochs=10
 half_lr=1
 early_stop=0
 max_norm=5
 # minibatch
 shuffle=1
-batch_size=3
-num_workers=4
+batch_size=4
+num_workers=0
 # optimizer
 optimizer=adam
 lr=1e-3
@@ -60,6 +63,8 @@ visdom_id="Conv-TasNet Training"
 # evaluate
 ev_use_cuda=0
 cal_sdr=1
+corpus=cs21
+array=simu_non_uniform
 # -- END Conv-TasNet Config
 
 # exp tag
@@ -75,7 +80,7 @@ ngpu=1  # always 1
 if [ $stage -le 1 ]; then
   echo "Stage 1: Generating json files including wav path and duration"
   [ ! -d $dumpdir ] && mkdir $dumpdir
-  preprocess.py --in-dir $data --out-dir $dumpdir --sample-rate $sample_rate
+  preprocess.py --in-dir $data --out-dir $dumpdir --sample-rate $sample_rate --corpus $corpus --percentage $percentage
 fi
 
 
@@ -85,9 +90,11 @@ else
   expdir=exp/train_${tag}
 fi
 
+cp run.sh $expdir/run.sh
+
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
-  ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
+  #${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
     CUDA_VISIBLE_DEVICES="$id" \
     train.py \
     --train_dir $train_dir \
@@ -124,9 +131,10 @@ if [ $stage -le 2 ]; then
     --print_freq ${print_freq} \
     --visdom $visdom \
     --visdom_epoch $visdom_epoch \
-    --visdom_id "$visdom_id"
+    --visdom_id "$visdom_id"\
+    --corpus $corpus \
+    --array $array
 fi
-
 
 if [ $stage -le 3 ]; then
   echo "Stage 3: Evaluate separation performance"

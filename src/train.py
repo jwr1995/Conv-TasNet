@@ -10,6 +10,7 @@ import torch
 from data import AudioDataLoader, AudioDataset
 from solver import Solver
 from conv_tasnet import ConvTasNet
+from multi_conv_tasnet import MultiConvTasNet
 
 
 parser = argparse.ArgumentParser(
@@ -98,6 +99,7 @@ parser.add_argument('--visdom_id', default='TasNet training',
                     help='Identifier for visdom run')
 parser.add_argument('--corpus',default='wsj0')
 parser.add_argument('--array',default='simu_non_linear')
+parser.add_argument('--multichannel',default=False)
 
 def main(args):
     # Construct Solver
@@ -109,15 +111,19 @@ def main(args):
                               segment=-1, cv_maxlen=args.cv_maxlen)  # -1 -> use full audio
     tr_loader = AudioDataLoader(tr_dataset, batch_size=1,
                                 shuffle=args.shuffle,
-                                num_workers=args.num_workers)
+                                num_workers=args.num_workers, multichannel=args.multichannel)
     cv_loader = AudioDataLoader(cv_dataset, batch_size=1,
-                                num_workers=0)
+                                num_workers=0, multichannel=args.multichannel)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model
-
-    model = ConvTasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
+    if args.multichannel == False:
+        model = ConvTasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
                        args.C, norm_type=args.norm_type, causal=args.causal,
                        mask_nonlinear=args.mask_nonlinear)
+    else:
+        model = MultiConvTasNet(args.N,args.L, args.B, args.H, args.P, args.X, args.R,
+                       args.C, norm_type=args.norm_type, causal=args.causal,
+                       mask_nonlinear=args.mask_nonlinear)    
     print(model)
     if args.use_cuda:
         model = torch.nn.DataParallel(model)
@@ -143,5 +149,6 @@ def main(args):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    args.multichannel=True
     print(args)
     main(args)

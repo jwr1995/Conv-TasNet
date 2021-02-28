@@ -145,18 +145,11 @@ class AudioDataLoader(data.DataLoader):
     NOTE: just use batchsize=1 here, so drop_last=True makes no sense here.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, multichannel=False, *args, **kwargs):
         super(AudioDataLoader, self).__init__(*args, **kwargs)
+        if multichannel:
+            self.collate_fn = _collate_fn_multi; return
         self.collate_fn = _collate_fn
-
-class MultiAudioDataLoader(data.DataLoader):
-    """
-    NOTE: just use batchsize=1 here, so drop_last=True makes no sense here.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(AudioDataLoader, self).__init__(*args, **kwargs)
-        self.collate_fn = _collate_fn_multi
 
 def _collate_fn_multi(batch):
     """
@@ -204,7 +197,7 @@ def _collate_fn(batch):
     # batch should be located in list
     assert len(batch) == 1
 
-    mixtures, sources = load_mixtures_and_sources(batch[0])
+    mixtures, sources = load_mixtures_and_sources(batch[0],multichannel=True)
 
     # get batch of lengths of input sequences
     ilens = np.array([mix.shape[0] for mix in mixtures])
@@ -304,7 +297,7 @@ def _collate_fn_eval(batch):
 
 
 # ------------------------------ utils ------------------------------------
-def load_mixtures_and_sources(batch, multi=False):
+def load_mixtures_and_sources(batch, multichannel=False):
     """
     Each info include wav path and wav duration.
     Returns:
@@ -339,10 +332,12 @@ def load_mixtures_and_sources(batch, multi=False):
         # read wav file
         #mix, _ = librosa.load(mix_path, sr=sample_rate)
         #s1, _ = librosa.load(s1_path, sr=sample_rate)
-        if multi == False:
+        if multichannel == False:
+            # 1 x samples
             mix = sf.read(mix_path)[0].T[channel]
             s1 = sf.read(s1_path)[0].T[channel]
         else:
+            # channels x samples
             mix = sf.read(mix_path)[0].T
             s1 = sf.read(s1_path)[0].T
             
@@ -358,10 +353,16 @@ def load_mixtures_and_sources(batch, multi=False):
         if segment_len >= 0:
             # segment
             for i in range(0, utt_len - segment_len + 1, segment_len):
-                mixtures.append(mix[i:i+segment_len])
+                if not multichannel:
+                    mixtures.append(mix[i:i+segment_len])
+                else:
+                    mixtures.append(mix[:,i:i+segment_len])
                 sources.append(s[i:i+segment_len])
             if utt_len % segment_len != 0:
-                mixtures.append(mix[-segment_len:])
+                if not multichannel:
+                    mixtures.append(mix[-segment_len:])
+                else:
+                    mixtures.append(mix[:,-segment_len:])
                 sources.append(s[-segment_len:])
         else:  # full utterance
             mixtures.append(mix)

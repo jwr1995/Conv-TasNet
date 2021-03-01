@@ -12,6 +12,7 @@ mp.set_sharing_strategy("file_system")
 from data import AudioDataLoader, AudioDataset
 from solver import Solver
 from conv_tasnet import ConvTasNet
+from multi_conv_tasnet import MultiConvTasNet
 
 torch.backends.cudnn.benchmark = False
 parser = argparse.ArgumentParser(
@@ -100,6 +101,7 @@ parser.add_argument('--visdom_id', default='TasNet training',
                     help='Identifier for visdom run')
 parser.add_argument('--corpus',default='wsj0')
 parser.add_argument('--array',default='simu_non_linear')
+parser.add_argument('--multichannel',default=False, type=bool)
 
 def main(args):
     # Construct Solver
@@ -109,15 +111,20 @@ def main(args):
     cv_dataset = AudioDataset(args.valid_dir, batch_size=1, args=args,  # 1 -> use less GPU memory to do cv
                               sample_rate=args.sample_rate,
                               segment=-1, cv_maxlen=args.cv_maxlen)  # -1 -> use full audio
-    tr_loader = AudioDataLoader(tr_dataset, batch_size=1,
+    print(args.multichannel)
+    tr_loader = AudioDataLoader(multichannel=args.multichannel,dataset=tr_dataset, batch_size=1,
                                 shuffle=args.shuffle,
                                 num_workers=args.num_workers)
-    cv_loader = AudioDataLoader(cv_dataset, batch_size=1,
+    cv_loader = AudioDataLoader(multichannel=args.multichannel,dataset=cv_dataset, batch_size=1,
                                 num_workers=0)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model
-
-    model = ConvTasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
+    if args.multichannel == False:
+        model = ConvTasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
+                       args.C, norm_type=args.norm_type, causal=args.causal,
+                       mask_nonlinear=args.mask_nonlinear)
+    else:
+        model = MultiConvTasNet(args.N,args.L, args.B, args.H, args.P, args.X, args.R,
                        args.C, norm_type=args.norm_type, causal=args.causal,
                        mask_nonlinear=args.mask_nonlinear)
     print(model)
@@ -145,5 +152,6 @@ def main(args):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    #args.multichannel=True
     print(args)
     main(args)

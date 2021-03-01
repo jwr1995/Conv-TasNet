@@ -30,6 +30,8 @@ parser.add_argument('--sample_rate', default=8000, type=int,
                     help='Sample rate')
 parser.add_argument('--batch_size', default=1, type=int,
                     help='Batch size')
+parser.add_argument('--corpus', default="cs21", type=str)
+parser.add_argument('--C', default=1, type=int)
 
 
 def evaluate(args):
@@ -47,7 +49,7 @@ def evaluate(args):
 
     # Load data
     dataset = AudioDataset(args.data_dir, args.batch_size,
-                           sample_rate=args.sample_rate, segment=-1)
+                           sample_rate=args.sample_rate, segment=-1, args=args)
     data_loader = AudioDataLoader(dataset, batch_size=1, num_workers=2)
 
     with torch.no_grad():
@@ -97,10 +99,15 @@ def cal_SDRi(src_ref, src_est, mix):
     Returns:
         average_SDRi
     """
-    src_anchor = np.stack([mix, mix], axis=0)
+    C=(src_ref.shape[0])
+    src_anchor = np.stack([mix]*C, axis=0)
+    print(src_anchor.shape)
     sdr, sir, sar, popt = bss_eval_sources(src_ref, src_est)
     sdr0, sir0, sar0, popt0 = bss_eval_sources(src_ref, src_anchor)
-    avg_SDRi = ((sdr[0]-sdr0[0]) + (sdr[1]-sdr0[1])) / 2
+    if C==2:
+        avg_SDRi = ((sdr[0]-sdr0[0]) + (sdr[1]-sdr0[1])) / 2
+    elif C==1:
+        avg_SDRi = (sdr[0]-sdr0[0])
     # print("SDRi1: {0:.2f}, SDRi2: {1:.2f}".format(sdr[0]-sdr0[0], sdr[1]-sdr0[1]))
     return avg_SDRi
 
@@ -114,14 +121,21 @@ def cal_SISNRi(src_ref, src_est, mix):
     Returns:
         average_SISNRi
     """
-    sisnr1 = cal_SISNR(src_ref[0], src_est[0])
-    sisnr2 = cal_SISNR(src_ref[1], src_est[1])
-    sisnr1b = cal_SISNR(src_ref[0], mix)
-    sisnr2b = cal_SISNR(src_ref[1], mix)
-    # print("SISNR base1 {0:.2f} SISNR base2 {1:.2f}, avg {2:.2f}".format(
-    #     sisnr1b, sisnr2b, (sisnr1b+sisnr2b)/2))
-    # print("SISNRi1: {0:.2f}, SISNRi2: {1:.2f}".format(sisnr1, sisnr2))
-    avg_SISNRi = ((sisnr1 - sisnr1b) + (sisnr2 - sisnr2b)) / 2
+    C = src_ref.shape[0]
+    if C ==2:
+        sisnr1 = cal_SISNR(src_ref[0], src_est[0])
+        sisnr2 = cal_SISNR(src_ref[1], src_est[1])
+        sisnr1b = cal_SISNR(src_ref[0], mix)
+        sisnr2b = cal_SISNR(src_ref[1], mix)
+        # print("SISNR base1 {0:.2f} SISNR base2 {1:.2f}, avg {2:.2f}".format(
+        #     sisnr1b, sisnr2b, (sisnr1b+sisnr2b)/2))
+        # print("SISNRi1: {0:.2f}, SISNRi2: {1:.2f}".format(sisnr1, sisnr2))
+        avg_SISNRi = ((sisnr1 - sisnr1b) + (sisnr2 - sisnr2b)) / 2
+    elif C==1:
+        sisnr1 = cal_SISNR(src_ref[0], src_est[0])
+        sisnr1b = cal_SISNR(src_ref[0], mix)
+        avg_SISNRi = (sisnr1 - sisnr1b)
+
     return avg_SISNRi
 
 

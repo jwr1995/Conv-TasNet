@@ -159,20 +159,19 @@ def _collate_fn(batch):
         sources_pad: B x C x T, torch.Tensor
     """
     # batch should be located in list
-    assert len(batch) == 1
-
+    assert len(batch) == 1, "Batch length not equal to 1"
     mixtures, sources = load_mixtures_and_sources(batch[0])
-
     # get batch of lengths of input sequences
     ilens = np.array([mix.shape[0] for mix in mixtures])
-
+   
     # perform padding and convert to tensor
     pad_value = 0
-
+    
     #print(np.array(mixtures).shape,np.array(sources).shape)
     mixtures_pad = pad_list([torch.from_numpy(mix).float()
                              for mix in mixtures], pad_value)
     ilens = torch.from_numpy(ilens)
+    
     sources_pad = pad_list([torch.from_numpy(s).float()
                             for s in sources], pad_value)
     #print(mixtures_pad.size(),ilens.size(),sources_pad.size())

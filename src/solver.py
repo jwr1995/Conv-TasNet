@@ -8,6 +8,7 @@ import torch
 
 from pit_criterion import cal_loss
 
+
 class Solver(object):
 
     def __init__(self, data, model, optimizer, args):
@@ -69,8 +70,8 @@ class Solver(object):
     def train(self):
         # Train model multi-epoches
         for epoch in range(self.start_epoch, self.epochs):
-            # Train one epoch
             print("Training...")
+            # Train one epoch
             self.model.train()  # Turn on BatchNorm & Dropout
             start = time.time()
             tr_avg_loss = self._run_one_epoch(epoch)
@@ -158,9 +159,7 @@ class Solver(object):
     def _run_one_epoch(self, epoch, cross_valid=False):
         start = time.time()
         total_loss = 0
-
         data_loader = self.tr_loader if not cross_valid else self.cv_loader
-
         # visualizing loss using visdom
         if self.visdom_epoch and not cross_valid:
             vis_opts_epoch = dict(title=self.visdom_id + " epoch " + str(epoch),
@@ -168,9 +167,8 @@ class Solver(object):
             vis_window_epoch = None
             vis_iters = torch.arange(1, len(data_loader) + 1)
             vis_iters_loss = torch.Tensor(len(data_loader))
-
         for i, (data) in enumerate(data_loader):
-            #print(data); exit();
+            #print(data)
             #if self.corpus=='wsj0':
             padded_mixture, mixture_lengths, padded_source = data
             if self.use_cuda:

@@ -6,12 +6,14 @@
 import argparse
 
 import torch
+import torch.multiprocessing as mp
+mp.set_sharing_strategy("file_system")
 
 from data import AudioDataLoader, AudioDataset
 from solver import Solver
 from conv_tasnet import ConvTasNet
 
-
+torch.backends.cudnn.benchmark = False
 parser = argparse.ArgumentParser(
     "Fully-Convolutional Time-domain Audio Separation Network (Conv-TasNet) "
     "with Permutation Invariant Training")

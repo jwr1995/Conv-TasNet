@@ -9,6 +9,8 @@ import torch
 from pit_criterion import cal_loss
 from loss import sisnr_loss
 
+torch.autograd.set_detect_anomaly(True)
+
 class Solver(object):
 
     def __init__(self, data, model, optimizer, args):
@@ -163,7 +165,7 @@ class Solver(object):
         total_loss = 0
 
         data_loader = self.tr_loader if not cross_valid else self.cv_loader
-
+        first=True
         # visualizing loss using visdom
         if self.visdom_epoch and not cross_valid:
             vis_opts_epoch = dict(title=self.visdom_id + " epoch " + str(epoch),
@@ -181,14 +183,16 @@ class Solver(object):
                 mixture_lengths = mixture_lengths.cuda()
                 padded_source = padded_source.cuda()
             estimate_source = self.model(padded_mixture)
-            if self.C == 2:
+            if self.C == 1:
                 loss = sisnr_loss(estimate_source,padded_source)
             else:
                 loss, max_snr, estimate_source, reorder_estimate_source = \
                 cal_loss(padded_source, estimate_source, mixture_lengths)
             if not cross_valid:
                 self.optimizer.zero_grad()
-                loss.backward()
+                loss.backward(retain_graph=True)
+                first=False
+
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(),
                                                self.max_norm)
                 self.optimizer.step()

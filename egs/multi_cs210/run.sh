@@ -11,7 +11,7 @@ conda activate cs21
 #_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
 data=/home/will/data/dummy/cs21
 #data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=3  # Modify this to control to start from which stage
+stage=2  # Modify this to control to start from which stage
 # -- END
 
 dumpdir=data  # directory to put generated json file
@@ -23,18 +23,18 @@ evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
 percentage=100
 sample_rate=16000
-segment=6  # seconds
-cv_maxlen=6  # seconds
+segment=2  # seconds
+cv_maxlen=3   # seconds
 # Network config
 N=256
-L=70
+L=80
 B=256
-H=512
+H=256
 P=3
 X=8
 R=4
 norm_type=gLN
-causal=0
+causal=1
 mask_nonlinear='relu'
 C=1
 # Training config
@@ -65,6 +65,7 @@ ev_use_cuda=0
 cal_sdr=1
 corpus=cs21
 array=simu_non_uniform
+multichannel=True
 # -- END Conv-TasNet Config
 
 # exp tag
@@ -133,7 +134,8 @@ if [ $stage -le 2 ]; then
     --visdom_epoch $visdom_epoch \
     --visdom_id "$visdom_id"\
     --corpus $corpus \
-    --array $array
+    --array $array \
+    --multichannel $multichannel
 fi
 
 if [ $stage -le 3 ]; then

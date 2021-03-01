@@ -109,11 +109,12 @@ def main(args):
     cv_dataset = AudioDataset(args.valid_dir, batch_size=1, args=args,  # 1 -> use less GPU memory to do cv
                               sample_rate=args.sample_rate,
                               segment=-1, cv_maxlen=args.cv_maxlen)  # -1 -> use full audio
-    tr_loader = AudioDataLoader(tr_dataset, batch_size=1,
+    print(args.multichannel)
+    tr_loader = AudioDataLoader(multichannel=args.multichannel,dataset=tr_dataset, batch_size=1,
                                 shuffle=args.shuffle,
-                                num_workers=args.num_workers, multichannel=args.multichannel)
-    cv_loader = AudioDataLoader(cv_dataset, batch_size=1,
-                                num_workers=0, multichannel=args.multichannel)
+                                num_workers=args.num_workers)
+    cv_loader = AudioDataLoader(multichannel=args.multichannel,dataset=cv_dataset, batch_size=1,
+                                num_workers=0)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model
     if args.multichannel == False:
@@ -149,6 +150,6 @@ def main(args):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    args.multichannel=True
+    #args.multichannel=True
     print(args)
     main(args)

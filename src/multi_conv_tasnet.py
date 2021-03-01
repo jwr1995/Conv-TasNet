@@ -4,6 +4,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.multiprocessing import Pool
 import sys,math
 sys.path.append("/home/will/Projects/Conv-TasNet/src")
 import utils
@@ -36,8 +37,9 @@ class MultiConvTasNet(nn.Module):
         self.mask_nonlinear = mask_nonlinear
         # Components
         self.encoder = Encoder(L, N)
-        self.encoder2D = Encoder2D(L,N,n_channels)
-        self.separator = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
+        self.spatial_encoder = SpatialEncoder(L,N,n_channels)
+        self.separator = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal,
+                        mask_nonlinear,multiplier=2)
         #self.separator2 = TemporalConvNet(N, B, H, P, X, R2, C, norm_type, causal, mask_nonlinear)
         self.decoder = Decoder(N, L)
         # init
@@ -53,8 +55,8 @@ class MultiConvTasNet(nn.Module):
             est_source: [M, C, T]
         """
         mixture_w = self.encoder(mixture[:,0,:])
-        spatial_mixture = self.encoder2D(mixture)
-        est_mask = self.separator(spatial_mixture)
+        spatial_mixture = self.spatial_encoder(mixture)
+        est_mask = self.separator(torch.cat((mixture_w,spatial_mixture),dim=1))
         est_source = self.decoder(mixture_w, est_mask)
 
         # T changed after conv1d in encoder, fix it here
@@ -84,7 +86,7 @@ class MultiConvTasNet(nn.Module):
         package = {
             # hyper-parameter
             'N': model.N, 'L': model.L, 'B': model.B, 'H': model.H,
-            'P': model.P, 'X': model.X, 'R1': model.R1, 'R2': model.R2, 'C': model.C,
+            'P': model.P, 'X': model.X, 'R': model.R, 'C': model.C,
             'norm_type': model.norm_type, 'causal': model.causal,
             'mask_nonlinear': model.mask_nonlinear,
             # state
@@ -97,27 +99,37 @@ class MultiConvTasNet(nn.Module):
             package['cv_loss'] = cv_loss
         return package
 
-class Encoder2D(nn.Module):
+class SpatialEncoder(nn.Module):
     """Estimation of the nonnegative mixture weight by a 1-D conv layer.
     """
-    def __init__(self, L, N, no_channels=8):
-        super(Encoder2D, self).__init__()
+    def __init__(self, L, N, n_channels=8):
+        super(SpatialEncoder, self).__init__()
+
         # Hyper-parameter
-        self.L, self.N = L, N
+        self.L, self.N, self.n_channels = L, N, n_channels
         # Components
         # 50% overlap
-        self.conv2d_U = nn.Conv2d(1, N, kernel_size=L, stride=L // 2, bias=False,padding=(int(math.ceil(L/2)),0))
+        #self.conv2d_U = nn.Conv2d(1, N, kernel_size=L, stride=L // 2, bias=False,padding=(int(math.ceil(L/2)),0))
+        self.encoders=nn.ModuleList([Encoder(L,int(N/n_channels))]*n_channels)
+        self.lstm = nn.LSTM(N,N,2,batch_first=True,bias=False)
+        self.h = None
+        self.c = None
 
-    def forward(self, mixture):
+    def forward(self, mixtures):
         """
         Args:
-            mixture: [M, T], M is batch size, T is #samples
+            mixture: [M, n_channels, T], M is batch size, T is #samples
         Returns:
             mixture_w: [M, N, K], where K = (T-L)/(L/2)+1 = 2T/L-1
         """
-        mixture = torch.unsqueeze(mixture, 1)  # [M, 1, T]
-        mixture_w = F.relu(self.conv2d_U(mixture))  # [M, N, K]
-        return mixture_w.squeeze(2)
+        encoded_mixtures =[F.relu(e(mixtures[:,i,:]))
+                    for i, e in enumerate(self.encoders)]
+        mixtures_s = torch.stack(encoded_mixtures)
+        C, M, N, K = mixtures_s.shape
+        mixtures_l = mixtures_s.reshape((M,K,C*N))
+
+        mixture_w, (self.h, self.c) = self.lstm(mixtures_l)
+        return mixture_w.movedim(1,2)
 
 
 if __name__ == "__main__":

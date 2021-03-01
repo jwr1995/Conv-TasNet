@@ -97,10 +97,10 @@ class ConvTasNet(nn.Module):
 class Encoder(nn.Module):
     """Estimation of the nonnegative mixture weight by a 1-D conv layer.
     """
-    def __init__(self, L, N):
+    def __init__(self, L, N, multi=False):
         super(Encoder, self).__init__()
         # Hyper-parameter
-        self.L, self.N = L, N
+        self.L, self.N, self.multi = L, N, multi
         # Components
         # 50% overlap
         self.conv1d_U = nn.Conv1d(1, N, kernel_size=L, stride=L // 2, bias=False)
@@ -112,6 +112,7 @@ class Encoder(nn.Module):
         Returns:
             mixture_w: [M, N, K], where K = (T-L)/(L/2)+1 = 2T/L-1
         """
+
         mixture = torch.unsqueeze(mixture, 1)  # [M, 1, T]
         mixture_w = F.relu(self.conv1d_U(mixture))  # [M, N, K]
         return mixture_w
@@ -144,7 +145,7 @@ class Decoder(nn.Module):
 
 class TemporalConvNet(nn.Module):
     def __init__(self, N, B, H, P, X, R, C, norm_type="gLN", causal=False,
-                 mask_nonlinear='relu'):
+                 mask_nonlinear='relu',multiplier=1):
         """
         Args:
             N: Number of filters in autoencoder
@@ -162,11 +163,12 @@ class TemporalConvNet(nn.Module):
         # Hyper-parameter
         self.C = C
         self.mask_nonlinear = mask_nonlinear
+        self.multiplier = multiplier
         # Components
         # [M, N, K] -> [M, N, K]
-        layer_norm = ChannelwiseLayerNorm(N)
+        layer_norm = ChannelwiseLayerNorm(N*multiplier)
         # [M, N, K] -> [M, B, K]
-        bottleneck_conv1x1 = nn.Conv1d(N, B, 1, bias=False)
+        bottleneck_conv1x1 = nn.Conv1d(N*2, B, 1, bias=False)
         # [M, B, K] -> [M, B, K]
         repeats = []
         for r in range(R):
@@ -199,7 +201,7 @@ class TemporalConvNet(nn.Module):
         """
         M, N, K = mixture_w.size()
         score = self.network(mixture_w)  # [M, N, K] -> [M, C*N, K]
-        score = score.view(M, self.C, N, K) # [M, C*N, K] -> [M, C, N, K]
+        score = score.view(M, self.C, int(N/self.multiplier), K) # [M, C*N, K] -> [M, C, N, K]
         if self.mask_nonlinear == 'softmax':
             est_mask = F.softmax(score, dim=1)
         elif self.mask_nonlinear == 'relu':

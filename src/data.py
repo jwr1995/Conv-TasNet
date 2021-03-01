@@ -116,7 +116,7 @@ class AudioDataset(data.Dataset):
             while True:
                 end = min(len(sorted_mix_infos), start + batch_size)
                 # Skip long audio to avoid out-of-memory issue
-                if int(sorted_mix_infos[start][1]) > cv_maxlen * sample_rate:
+                if args.corpus == "wsj0" and int(sorted_mix_infos[start][1]) > cv_maxlen * sample_rate:
                     start = end
                     continue
                 if args.C==2:
@@ -179,7 +179,9 @@ def _collate_fn_multi(batch):
                             for s in sources], pad_value)
     #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
     # N x T x C -> N x C x T
-    #sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
+    #
+    sources_pad = sources_pad.reshape((sources_pad.shape[0], 1,
+                    sources_pad.shape[1])).contiguous()
 #    print(mixtures_pad.size(),ilens.size(),sources_pad.size())
 
     return mixtures_pad, ilens, sources_pad
@@ -197,7 +199,7 @@ def _collate_fn(batch):
     # batch should be located in list
     assert len(batch) == 1
 
-    mixtures, sources = load_mixtures_and_sources(batch[0],multichannel=True)
+    mixtures, sources = load_mixtures_and_sources(batch[0],multichannel=False)
 
     # get batch of lengths of input sequences
     ilens = np.array([mix.shape[0] for mix in mixtures])
@@ -214,6 +216,8 @@ def _collate_fn(batch):
     #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
     # N x T x C -> N x C x T
     #sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
+    sources_pad = sources_pad.reshape((sources_pad.shape[0], 1,
+                    sources_pad.shape[1])).contiguous()
 #    print(mixtures_pad.size(),ilens.size(),sources_pad.size())
 
     return mixtures_pad, ilens, sources_pad
@@ -295,6 +299,19 @@ def _collate_fn_eval(batch):
     ilens = torch.from_numpy(ilens)
     return mixtures_pad, ilens, filenames
 
+def _normalize(sig, rms_level=0):
+    """
+    https://superkogito.github.io/blog/rmsnormalization.html
+    """
+
+    # linear rms level and scaling factor
+    r = 10**(rms_level / 10.0)
+    a = np.sqrt( (len(sig) * r**2) / np.sum(sig**2) )
+
+    # normalize
+    y = sig * a
+
+    return y
 
 # ------------------------------ utils ------------------------------------
 def load_mixtures_and_sources(batch, multichannel=False):
@@ -335,12 +352,12 @@ def load_mixtures_and_sources(batch, multichannel=False):
         if multichannel == False:
             # 1 x samples
             mix = sf.read(mix_path)[0].T[channel]
-            s1 = sf.read(s1_path)[0].T[channel]
+            s1 = _normalize(sf.read(s1_path)[0].T[channel])
         else:
             # channels x samples
             mix = sf.read(mix_path)[0].T
-            s1 = sf.read(s1_path)[0].T
-            
+            s1 = _normalize(sf.read(s1_path)[0].T[0])
+
         if C==2:
             s2 = sf.read(s2_path)[0].T
 
@@ -348,7 +365,8 @@ def load_mixtures_and_sources(batch, multichannel=False):
         if C==2:
             s = np.dstack((s1, s2))[0]  # T x C, C = 2
         else:
-            s = np.dstack((s1))[0]
+            s=s1
+            #s = np.dstack((s1))[0]
         utt_len = mix.shape[-1]
         if segment_len >= 0:
             # segment

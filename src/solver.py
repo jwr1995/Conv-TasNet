@@ -9,7 +9,7 @@ import torch
 from pit_criterion import cal_loss
 from loss import sisnr_loss
 
-torch.autograd.set_detect_anomaly(True)
+#torch.autograd.set_detect_anomaly(True)
 
 
 class Solver(object):
@@ -188,7 +188,7 @@ class Solver(object):
                 cal_loss(padded_source, estimate_source, mixture_lengths)
             if not cross_valid:
                 self.optimizer.zero_grad()
-                loss.backward(retain_graph=True)
+                loss.backward()
                 first=False
 
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(),

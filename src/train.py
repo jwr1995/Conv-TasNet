@@ -99,7 +99,7 @@ parser.add_argument('--visdom_id', default='TasNet training',
                     help='Identifier for visdom run')
 parser.add_argument('--corpus',default='wsj0')
 parser.add_argument('--array',default='simu_non_linear')
-parser.add_argument('--multichannel',default=False)
+parser.add_argument('--multichannel',default=False, type=bool)
 
 def main(args):
     # Construct Solver
@@ -123,7 +123,7 @@ def main(args):
     else:
         model = MultiConvTasNet(args.N,args.L, args.B, args.H, args.P, args.X, args.R,
                        args.C, norm_type=args.norm_type, causal=args.causal,
-                       mask_nonlinear=args.mask_nonlinear)    
+                       mask_nonlinear=args.mask_nonlinear)
     print(model)
     if args.use_cuda:
         model = torch.nn.DataParallel(model)

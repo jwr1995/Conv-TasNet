@@ -9,8 +9,12 @@ conda init
 conda activate cs21
 #export LDLIBRARYPATH=/share/mini1/sw/std/cuda/
 #_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
-data=/home/will/data/dummy/cs21
-#data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
+
+export NCCL_SOCKET_IFNAME=virbr0
+export NCCL_IB_DISABLE=1
+
+#data=/home/will/data/dummy/cs21
+data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
 stage=2  # Modify this to control to start from which stage
 # -- END
 
@@ -21,7 +25,7 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=100
+percentage=0.8
 sample_rate=16000
 segment=2  # seconds
 cv_maxlen=3   # seconds
@@ -46,15 +50,15 @@ early_stop=0
 max_norm=5
 # minibatch
 shuffle=1
-batch_size=4
-num_workers=0
+batch_size=32
+num_workers=4
 # optimizer
 optimizer=adam
 lr=1e-3
 momentum=0
 l2=0
 # save and visualize
-checkpoint=0
+checkpoint=1
 continue_from=""
 print_freq=10
 visdom=0

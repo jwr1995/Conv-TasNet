@@ -67,7 +67,7 @@ if __name__ == "__main__":
     parser.add_argument('--corpus', type=str, default="cs21",
                         help='Set corpus')
     parser.add_argument('--array', type=str, default='simu_non_uniform')
-    parser.add_argument('--percentage', type=int, default=20)
+    parser.add_argument('--percentage', type=float, default=20.0)
     args = parser.parse_args()
     print(args)
     preprocess(args)

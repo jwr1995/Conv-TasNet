@@ -110,8 +110,8 @@ class SpatialEncoder(nn.Module):
         # Components
         # 50% overlap
         #self.conv2d_U = nn.Conv2d(1, N, kernel_size=L, stride=L // 2, bias=False,padding=(int(math.ceil(L/2)),0))
-        self.encoders=nn.ModuleList([Encoder(L,int(N/n_channels))]*n_channels)
-        self.lstm = nn.LSTM(N,N,2,batch_first=True,bias=False)
+        self.encoders=nn.ModuleList([Encoder(L,int(N))]*n_channels)
+        self.lstm = nn.LSTM(N*n_channels,N,2,batch_first=True,bias=False)
         self.h = None
         self.c = None
 
@@ -130,7 +130,8 @@ class SpatialEncoder(nn.Module):
         mixtures_l = mixtures_s.reshape((M,K,C*N))
 
         mixture_w, (self.h, self.c) = self.lstm(mixtures_l)
-        return mixture_w.movedim(1,2)
+        mixture_o = F.relu(mixture_w)
+        return mixture_o.movedim(1,2)
 
 
 if __name__ == "__main__":

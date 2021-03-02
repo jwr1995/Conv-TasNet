@@ -15,7 +15,7 @@ export NCCL_IB_DISABLE=1
 
 #data=/home/will/data/dummy/cs21
 data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=2  # Modify this to control to start from which stage
+stage=1  # Modify this to control to start from which stage
 # -- END
 
 dumpdir=data  # directory to put generated json file
@@ -25,7 +25,7 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=0.8
+percentage=2
 sample_rate=16000
 segment=2  # seconds
 cv_maxlen=3   # seconds
@@ -59,7 +59,7 @@ momentum=0
 l2=0
 # save and visualize
 checkpoint=1
-continue_from="exp/train_r16000_N256_L80_B256_H256_P3_X8_R4_C1_gLN_causal1_relu_epoch50_half1_norm5_bs32_worker4_adam_lr1e-3_mmt0_l20_train/epoch3.pth.tar"
+continue_from=""
 print_freq=10
 visdom=0
 visdom_epoch=0

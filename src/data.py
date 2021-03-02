@@ -203,15 +203,15 @@ def _collate_fn(batch):
 
     # get batch of lengths of input sequences
     ilens = np.array([mix.shape[0] for mix in mixtures])
-   
+
     # perform padding and convert to tensor
     pad_value = 0
-    
+
     #print(np.array(mixtures).shape,np.array(sources).shape)
     mixtures_pad = pad_list([torch.from_numpy(mix).float()
                              for mix in mixtures], pad_value)
     ilens = torch.from_numpy(ilens)
-    
+
     sources_pad = pad_list([torch.from_numpy(s).float()
                             for s in sources], pad_value)
     #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
@@ -271,10 +271,8 @@ class EvalDataLoader(data.DataLoader):
     """
     NOTE: just use batchsize=1 here, so drop_last=True makes no sense here.
     """
-
     def __init__(self, multichannel=False, *args, **kwargs):
-        self.persistent_workers=True
-        self.num_workers=0
+        super(EvalDataLoader, self).__init__(*args, **kwargs)
         if multichannel:
             self.collate_fn = _collate_fn_eval_multi; return
         self.collate_fn = _collate_fn_eval
@@ -316,7 +314,7 @@ def _collate_fn_eval_multi(batch):
     mixtures, filenames = load_mixtures(batch[0], multichannel=True)
 
     # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[0] for mix in mixtures])
+    ilens = np.array([mix.shape[1] for mix in mixtures])
 
     # perform padding and convert to tensor
     pad_value = 0
@@ -430,7 +428,7 @@ def load_mixtures(batch,multichannel=False):
         mix_path = mix_info[0]
         # read wav file
         if C == 1:
-            if not multi:
+            if not multichannel:
                 channel = mix_info[-1]
                 mix = sf.read(mix_path)[0].T[channel]
             else:

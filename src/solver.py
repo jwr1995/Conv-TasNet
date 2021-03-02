@@ -173,6 +173,7 @@ class Solver(object):
             vis_iters = torch.arange(1, len(data_loader) + 1)
             vis_iters_loss = torch.Tensor(len(data_loader))
         for i, (data) in enumerate(data_loader):
+            #if i<1700: continue
             #print(data)
             #if self.corpus=='wsj0':
             padded_mixture, mixture_lengths, padded_source = data
@@ -188,7 +189,15 @@ class Solver(object):
                 cal_loss(padded_source, estimate_source, mixture_lengths)
             if not cross_valid:
                 self.optimizer.zero_grad()
-                loss.backward(retain_graph=True)
+                try:
+                    loss.backward(retain_graph=True)
+                    #print(model.spatial_encoder.lstm.graph.parameters())
+                    #print("Gone backwards")
+                    #if self.max_grad_clip > 0:
+                    #torch.nn.utils.clip_grad_value_(self.model.parameters(), 1)
+                except Exception as e:
+                    print("Error on epoch",str(epoch),"iteration",str(i),". Loss =",loss.item())
+                    continue
                 first=False
 
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(),

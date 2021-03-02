@@ -13,10 +13,9 @@ conda activate cs21
 export NCCL_SOCKET_IFNAME=virbr0
 export NCCL_IB_DISABLE=1
 
-data=/home/will/data/dummy/cs21
-#data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=3  # Modify this to control to start from which stage
-# -- END
+#data=/home/will/data/dummy/cs21
+data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
+stage=1  # Modify this to control to start from which stage
 
 dumpdir=data  # directory to put generated json file
 
@@ -25,15 +24,15 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=100
+percentage=8
 sample_rate=16000
 segment=2  # seconds
 cv_maxlen=3   # seconds
 # Network config
-N=256
-L=80
+N=512
+L=40
 B=256
-H=256
+H=512
 P=3
 X=8
 R=4
@@ -44,7 +43,7 @@ C=1
 # Training config
 use_cuda=1
 id=0,1,2,3
-epochs=100
+epochs=50
 half_lr=1
 early_stop=0
 max_norm=4
@@ -54,7 +53,7 @@ batch_size=4
 num_workers=4
 # optimizer
 optimizer=adam
-lr=1e-3
+lr=5e-3
 momentum=0
 l2=0
 # save and visualize
@@ -76,7 +75,7 @@ multichannel=True
 # -- END Conv-TasNet Config
 
 # exp tag
-tag="" # tag for managing experiments.
+tag="BIG" # tag for managing experiments.
 
 ngpu=1  # always 1
 
@@ -146,6 +145,7 @@ if [ $stage -le 2 ]; then
     --multichannel $multichannel \
     > $expdir/train.log
 fi
+cp run.sh.log $expdir/run.sh.log
 
 if [ $stage -le 3 ]; then
   echo "Stage 3: Evaluate separation performance"

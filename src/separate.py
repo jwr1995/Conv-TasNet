@@ -12,6 +12,7 @@ import torch
 
 from data import EvalDataLoader, EvalDataset
 from conv_tasnet import ConvTasNet
+from multi_conv_tasnet import MultiConvTasNet
 from utils import remove_pad
 
 
@@ -30,7 +31,8 @@ parser.add_argument('--sample_rate', default=8000, type=int,
                     help='Sample rate')
 parser.add_argument('--batch_size', default=1, type=int,
                     help='Batch size')
-
+parser.add_argument('--multichannel',default=False, type=bool)
+parser.add_argument('--num_workers',default=0,type=int)
 
 def separate(args):
     if args.mix_dir is None and args.mix_json is None:
@@ -38,7 +40,10 @@ def separate(args):
               "mix_json is ignored.")
 
     # Load model
-    model = ConvTasNet.load_model(args.model_path)
+    if args.multichannel:
+        model = MultiConvTasNet.load_model(args.model_path)
+    else:
+        model = ConvTasNet.load_model(args.model_path)
     print(model)
     model.eval()
     if True:
@@ -49,7 +54,7 @@ def separate(args):
     eval_dataset = EvalDataset(args.mix_dir, args.mix_json,
                                batch_size=args.batch_size,
                                sample_rate=args.sample_rate)
-    eval_loader =  EvalDataLoader(eval_dataset, batch_size=1)
+    eval_loader =  EvalDataLoader(multichannel=True,dataset=eval_dataset, batch_size=1)
     os.makedirs(args.out_dir, exist_ok=True)
 
     def write(inputs, filename, sr=args.sample_rate):

@@ -54,7 +54,7 @@ def overlap_and_add(signal, frame_step):
     return result
 
 
-def remove_pad(inputs, inputs_lengths):
+def remove_pad(inputs, inputs_lengths, multichannel=False):
     """
     Args:
         inputs: torch.Tensor, [B, C, T] or [B, T], B is batch size
@@ -64,6 +64,7 @@ def remove_pad(inputs, inputs_lengths):
     """
     results = []
     dim = inputs.dim()
+
     if dim == 3:
         C = inputs.size(1)
     for input, length in zip(inputs, inputs_lengths):
@@ -71,6 +72,7 @@ def remove_pad(inputs, inputs_lengths):
             results.append(input[:,:length].view(C, -1).cpu().numpy())
         elif dim == 2:  # [B, T]
             results.append(input[:length].view(-1).cpu().numpy())
+
     return results
 
 

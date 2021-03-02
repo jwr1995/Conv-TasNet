@@ -11,7 +11,7 @@ from itertools import  compress
 import soundfile as sf
 
 
-def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=None):
+def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=None, complete=False):
     file_infos = []
     in_dir = os.path.abspath(in_dir)
     wav_list = os.listdir(in_dir)
@@ -22,10 +22,14 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=
             continue
         wav_path = os.path.join(in_dir, wav_file)
         samples = sf.read(wav_path)[0]
-        for channel in range(samples.shape[1]):
-             # file path, num samples, num channels, channel idx
+        if complete==True:
+            for channel in range(samples.shape[1]):
+                 # file path, num samples, num channels, channel idx
+                file_infos.append((wav_path, samples.shape[0],
+                samples.shape[1], channel))
+        else:
             file_infos.append((wav_path, samples.shape[0],
-            samples.shape[1], channel))
+            samples.shape[1], 0))
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     with open(os.path.join(out_dir, out_filename + '.json'), 'w') as f:

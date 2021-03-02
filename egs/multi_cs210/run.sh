@@ -65,11 +65,14 @@ visdom=0
 visdom_epoch=0
 visdom_id="Conv-TasNet Training"
 # evaluate
-ev_use_cuda=0
+ev_use_cuda=1
 cal_sdr=1
+
+#corpus params
 corpus=cs21
 array=simu_non_uniform
 multichannel=True
+
 # -- END Conv-TasNet Config
 
 # exp tag
@@ -100,7 +103,6 @@ cp run.sh $expdir/run.sh
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
   #${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
-   # CUDA_VISIBLE_DEVICES="$id" \
     train.py \
     --train_dir $train_dir \
     --valid_dir $valid_dir \
@@ -139,32 +141,38 @@ if [ $stage -le 2 ]; then
     --visdom_id "$visdom_id"\
     --corpus $corpus \
     --array $array \
-    --multichannel $multichannel
+    --multichannel $multichannel \
+    > $expdir/train.log
 fi
 cp run.sh.log $expdir/run.sh.log
 
 if [ $stage -le 3 ]; then
   echo "Stage 3: Evaluate separation performance"
-  ${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
+  #${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
     evaluate.py \
     --model_path ${expdir}/final.pth.tar \
     --data_dir $evaluate_dir \
     --cal_sdr $cal_sdr \
     --use_cuda $ev_use_cuda \
     --sample_rate $sample_rate \
-    --batch_size $batch_size
+    --batch_size $batch_size \
+    --multichannel $multichannel \
+    > $expdir/eval.log
 fi
 
 
 if [ $stage -le 4 ]; then
   echo "Stage 4: Separate speech using Conv-TasNet"
   separate_out_dir=${expdir}/separate
-  ${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
+  #${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
     separate.py \
     --model_path ${expdir}/final.pth.tar \
     --mix_json $separate_dir/mix.json \
     --out_dir ${separate_out_dir} \
     --use_cuda $ev_use_cuda \
     --sample_rate $sample_rate \
-    --batch_size $batch_size
+    --batch_size $batch_size \
+    --num_workers $num_workers \
+    --multichannel $multichannel
+    > $expdir/separate.log
 fi

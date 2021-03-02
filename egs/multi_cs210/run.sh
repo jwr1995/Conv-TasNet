@@ -47,7 +47,7 @@ id=0,1,2,3
 epochs=10
 half_lr=1
 early_stop=0
-max_norm=5
+max_norm=4
 # minibatch
 shuffle=1
 batch_size=32
@@ -98,10 +98,12 @@ else
   expdir=exp/train_${tag}
 fi
 
+mkdir $expdir
 cp run.sh $expdir/run.sh
 
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
+  touch $expdir/train.log
   #${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
     train.py \
     --train_dir $train_dir \

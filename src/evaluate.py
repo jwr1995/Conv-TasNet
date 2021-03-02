@@ -11,9 +11,10 @@ from mir_eval.separation import bss_eval_sources
 import numpy as np
 import torch
 
-from data import AudioDataLoader, AudioDataset
+from data import AudioDataLoader, AudioDataset, normalize
 from pit_criterion import cal_loss
 from conv_tasnet import ConvTasNet
+from multi_conv_tasnet import  MultiConvTasNet
 from utils import remove_pad
 
 
@@ -32,7 +33,7 @@ parser.add_argument('--batch_size', default=1, type=int,
                     help='Batch size')
 parser.add_argument('--corpus', default="cs21", type=str)
 parser.add_argument('--C', default=1, type=int)
-
+parser.add_argument('--multichannel',default=False, type=bool)
 
 def evaluate(args):
     total_SISNRi = 0
@@ -40,7 +41,10 @@ def evaluate(args):
     total_cnt = 0
 
     # Load model
-    model = ConvTasNet.load_model(args.model_path)
+    if not args.multichannel:
+        model = ConvTasNet.load_model(args.model_path)
+    else:
+        model = MultiConvTasNet.load_model(args.model_path)
     print(model)
     model.eval()
     #if args.use_cuda:
@@ -50,12 +54,15 @@ def evaluate(args):
     # Load data
     dataset = AudioDataset(args.data_dir, args.batch_size,
                            sample_rate=args.sample_rate, segment=-1, args=args)
-    data_loader = AudioDataLoader(dataset, batch_size=1, num_workers=2)
+    print(args.multichannel)
+    data_loader = AudioDataLoader(multichannel=args.multichannel,dataset=dataset,
+                                    batch_size=1, num_workers=2)
 
     with torch.no_grad():
         for i, (data) in enumerate(data_loader):
             # Get batch data
-            padded_mixture, mixture_lengths, padded_source = data
+            padded_mixture, mixture_lengths, padded_source = data # batch size x channels x samples
+
             #if args.use_cuda:
             if True:
                 padded_mixture = padded_mixture.cuda()
@@ -63,14 +70,16 @@ def evaluate(args):
                 padded_source = padded_source.cuda()
             # Forward
             estimate_source = model(padded_mixture)  # [B, C, T]
+            #print(estimate_source.shape)
             loss, max_snr, estimate_source, reorder_estimate_source = \
                 cal_loss(padded_source, estimate_source, mixture_lengths)
             # Remove padding and flat
-            mixture = remove_pad(padded_mixture, mixture_lengths)
+            mixture = remove_pad(padded_mixture[:,0,:], mixture_lengths)
             source = remove_pad(padded_source, mixture_lengths)
             # NOTE: use reorder estimate source
             estimate_source = remove_pad(reorder_estimate_source,
                                          mixture_lengths)
+            #print(mixture[0][0].shape,source[0].shape,estimate_source[0].shape)
             # for each utterance
             for mix, src_ref, src_est in zip(mixture, source, estimate_source):
                 print("Utt", total_cnt + 1)
@@ -101,7 +110,7 @@ def cal_SDRi(src_ref, src_est, mix):
     """
     C=(src_ref.shape[0])
     src_anchor = np.stack([mix]*C, axis=0)
-    print(src_anchor.shape)
+    print(src_ref.shape, src_est.shape)
     sdr, sir, sar, popt = bss_eval_sources(src_ref, src_est)
     sdr0, sir0, sar0, popt0 = bss_eval_sources(src_ref, src_anchor)
     if C==2:

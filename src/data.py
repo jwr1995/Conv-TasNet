@@ -166,8 +166,7 @@ def _collate_fn_multi(batch):
     mixtures, sources = load_mixtures_and_sources(batch[0], True)
 
     # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[0] for mix in mixtures])
-
+    ilens = np.array([mix.shape[1] for mix in mixtures])
     # perform padding and convert to tensor
     pad_value = 0
 
@@ -271,10 +270,12 @@ class EvalDataLoader(data.DataLoader):
     NOTE: just use batchsize=1 here, so drop_last=True makes no sense here.
     """
 
-    def __init__(self, *args, **kwargs):
-        super(EvalDataLoader, self).__init__(*args, **kwargs)
+    def __init__(self, multichannel=False, *args, **kwargs):
+        self.persistent_workers=True
+        self.num_workers=0
+        if multichannel:
+            self.collate_fn = _collate_fn_eval_multi; return
         self.collate_fn = _collate_fn_eval
-
 
 def _collate_fn_eval(batch):
     """
@@ -290,6 +291,29 @@ def _collate_fn_eval(batch):
     mixtures, filenames = load_mixtures(batch[0])
 
     # get batch of lengths of input sequences
+    ilens = np.array([mix.shape[1] for mix in mixtures])
+
+    # perform padding and convert to tensor
+    pad_value = 0
+    mixtures_pad = pad_list([torch.from_numpy(mix).float()
+                             for mix in mixtures], pad_value)
+    ilens = torch.from_numpy(ilens)
+    return mixtures_pad, ilens, filenames
+
+def _collate_fn_eval_multi(batch):
+    """
+    Args:
+        batch: list, len(batch) = 1. See AudioDataset.__getitem__()
+    Returns:
+        mixtures_pad: B x T, torch.Tensor
+        ilens : B, torch.Tentor
+        filenames: a list contain B strings
+    """
+    # batch should be located in list
+    assert len(batch) == 1
+    mixtures, filenames = load_mixtures(batch[0], multichannel=True)
+
+    # get batch of lengths of input sequences
     ilens = np.array([mix.shape[0] for mix in mixtures])
 
     # perform padding and convert to tensor
@@ -299,7 +323,7 @@ def _collate_fn_eval(batch):
     ilens = torch.from_numpy(ilens)
     return mixtures_pad, ilens, filenames
 
-def _normalize(sig, rms_level=0):
+def normalize(sig, rms_level=0):
     """
     https://superkogito.github.io/blog/rmsnormalization.html
     """
@@ -352,11 +376,11 @@ def load_mixtures_and_sources(batch, multichannel=False):
         if multichannel == False:
             # 1 x samples
             mix = sf.read(mix_path)[0].T[channel]
-            s1 = _normalize(sf.read(s1_path)[0].T[channel])
+            s1 = normalize(sf.read(s1_path)[0].T[channel])
         else:
             # channels x samples
             mix = sf.read(mix_path)[0].T
-            s1 = _normalize(sf.read(s1_path)[0].T[0])
+            s1 = normalize(sf.read(s1_path)[0].T[0])
 
         if C==2:
             s2 = sf.read(s2_path)[0].T
@@ -378,7 +402,7 @@ def load_mixtures_and_sources(batch, multichannel=False):
                 sources.append(s[i:i+segment_len])
             if utt_len % segment_len != 0:
                 if not multichannel:
-                    mixtures.append(mix[-segment_len:])
+                    mixtures.append(mix[:,-segment_len:])
                 else:
                     mixtures.append(mix[:,-segment_len:])
                 sources.append(s[-segment_len:])
@@ -388,7 +412,7 @@ def load_mixtures_and_sources(batch, multichannel=False):
     return mixtures, sources
 
 
-def load_mixtures(batch):
+def load_mixtures(batch,multichannel=False):
     """
     Returns:
         mixtures: a list containing B items, each item is T np.ndarray
@@ -404,8 +428,12 @@ def load_mixtures(batch):
         mix_path = mix_info[0]
         # read wav file
         if C == 1:
-            channel = mix_info[-1]
-            mix = sf.read(mix_path)[0].T[channel]
+            if not multi:
+                channel = mix_info[-1]
+                mix = sf.read(mix_path)[0].T[channel]
+            else:
+                channel = 0
+                mix = sf.read(mix_path)[0].T
         else:
             mix, _ = librosa.load(mix_path, sr=sample_rate)
         mixtures.append(mix)

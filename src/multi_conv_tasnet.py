@@ -122,6 +122,7 @@ class SpatialEncoder(nn.Module):
         Returns:
             mixture_w: [M, N, K], where K = (T-L)/(L/2)+1 = 2T/L-1
         """
+        self.lstm.flatten_parameters()
         encoded_mixtures =[F.relu(e(mixtures[:,i,:]))
                     for i, e in enumerate(self.encoders)]
         mixtures_s = torch.stack(encoded_mixtures)

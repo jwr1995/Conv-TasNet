@@ -44,7 +44,7 @@ C=1
 # Training config
 use_cuda=1
 id=0,1,2,3
-epochs=10
+epochs=50
 half_lr=1
 early_stop=0
 max_norm=5
@@ -59,7 +59,7 @@ momentum=0
 l2=0
 # save and visualize
 checkpoint=1
-continue_from="exp/train_r16000_N256_L80_B256_H256_P3_X8_R4_C1_gLN_causal1_relu_epoch10_half1_norm5_bs32_worker4_adam_lr1e-3_mmt0_l20_train/epoch3.pth.tar"
+continue_from="exp/train_r16000_N256_L80_B256_H256_P3_X8_R4_C1_gLN_causal1_relu_epoch50_half1_norm5_bs32_worker4_adam_lr1e-3_mmt0_l20_train/epoch3.pth.tar"
 print_freq=10
 visdom=0
 visdom_epoch=0
@@ -141,7 +141,7 @@ if [ $stage -le 2 ]; then
     --array $array \
     --multichannel $multichannel
 fi
-cp $expdir/run.sh.log
+cp run.sh.log $expdir/run.sh.log
 
 if [ $stage -le 3 ]; then
   echo "Stage 3: Evaluate separation performance"

@@ -194,7 +194,7 @@ class Solver(object):
                     #print(model.spatial_encoder.lstm.graph.parameters())
                     #print("Gone backwards")
                     #if self.max_grad_clip > 0:
-                    torch.nn.utils.clip_grad_value_(self.model.parameters(), 1)
+                    #torch.nn.utils.clip_grad_value_(self.model.parameters(), 1)
                 except Exception as e:
                     print("Error on epoch",str(epoch),"iteration",str(i),". Loss =",loss.item())
                     continue

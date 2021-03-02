@@ -13,9 +13,9 @@ conda activate cs21
 export NCCL_SOCKET_IFNAME=virbr0
 export NCCL_IB_DISABLE=1
 
-#data=/home/will/data/dummy/cs21
-data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=2  # Modify this to control to start from which stage
+data=/home/will/data/dummy/cs21
+#data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
+stage=3  # Modify this to control to start from which stage
 # -- END
 
 dumpdir=data  # directory to put generated json file
@@ -25,7 +25,7 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=0.8
+percentage=100
 sample_rate=16000
 segment=2  # seconds
 cv_maxlen=3   # seconds
@@ -44,13 +44,13 @@ C=1
 # Training config
 use_cuda=1
 id=0,1,2,3
-epochs=10
+epochs=100
 half_lr=1
 early_stop=0
 max_norm=4
 # minibatch
 shuffle=1
-batch_size=32
+batch_size=4
 num_workers=4
 # optimizer
 optimizer=adam
@@ -160,7 +160,6 @@ if [ $stage -le 3 ]; then
     --multichannel $multichannel \
     > $expdir/eval.log
 fi
-
 
 if [ $stage -le 4 ]; then
   echo "Stage 4: Separate speech using Conv-TasNet"

@@ -54,7 +54,7 @@ def separate(args):
     eval_dataset = EvalDataset(args.mix_dir, args.mix_json,
                                batch_size=args.batch_size,
                                sample_rate=args.sample_rate)
-    eval_loader =  EvalDataLoader(multichannel=True,dataset=eval_dataset, batch_size=1)
+    eval_loader =  EvalDataLoader(multichannel=args.multichannel, dataset=eval_dataset, batch_size=1, num_workers=args.num_workers)
     os.makedirs(args.out_dir, exist_ok=True)
 
     def write(inputs, filename, sr=args.sample_rate):
@@ -70,18 +70,24 @@ def separate(args):
             if True:
                 mixture, mix_lengths = mixture.cuda(), mix_lengths.cuda()
             # Forward
-            estimate_source = model(mixture)  # [B, C, T]
+            estimate_source = model(mixture)  # [B, C, T];
+
             # Remove padding and flat
             flat_estimate = remove_pad(estimate_source, mix_lengths)
-            mixture = remove_pad(mixture, mix_lengths)
+
+            mixture = remove_pad(mixture, mix_lengths, multichannel=args.multichannel)
             # Write result
             for i, filename in enumerate(filenames):
                 filename = os.path.join(args.out_dir,
                                         os.path.basename(filename).strip('.wav'))
-                write(mixture[i], filename + '.wav')
+                if args.multichannel:
+                    write(mixture[i][0], filename + '.wav',args.sample_rate)
+                else:
+                    write(mixture[i], filename + '.wav',args.sample_rate)
                 C = flat_estimate[i].shape[0]
                 for c in range(C):
-                    write(flat_estimate[i][c], filename + '_s{}.wav'.format(c+1))
+                    #print(flat_estimate[i][c].shape)
+                    write(flat_estimate[i][c], filename + '_s{}.wav'.format(c+1),args.sample_rate)
 
 
 if __name__ == '__main__':

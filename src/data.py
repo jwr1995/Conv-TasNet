@@ -291,7 +291,7 @@ def _collate_fn_eval(batch):
     mixtures, filenames = load_mixtures(batch[0])
 
     # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[1] for mix in mixtures])
+    ilens = np.array([mix.shape[0] for mix in mixtures])
 
     # perform padding and convert to tensor
     pad_value = 0

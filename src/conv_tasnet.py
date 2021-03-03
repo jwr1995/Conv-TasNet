@@ -168,7 +168,7 @@ class TemporalConvNet(nn.Module):
         # [M, N, K] -> [M, N, K]
         layer_norm = ChannelwiseLayerNorm(N*multiplier)
         # [M, N, K] -> [M, B, K]
-        bottleneck_conv1x1 = nn.Conv1d(N*2, B, 1, bias=False)
+        bottleneck_conv1x1 = nn.Conv1d(N*multiplier, B, 1, bias=False)
         # [M, B, K] -> [M, B, K]
         repeats = []
         for r in range(R):

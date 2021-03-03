@@ -74,7 +74,10 @@ def evaluate(args):
             loss, max_snr, estimate_source, reorder_estimate_source = \
                 cal_loss(padded_source, estimate_source, mixture_lengths)
             # Remove padding and flat
-            mixture = remove_pad(padded_mixture[:,0,:], mixture_lengths)
+            if args.multichannel:
+                mixture = remove_pad(padded_mixture[:,0,:], mixture_lengths)
+            else:
+                mixture = remove_pad(padded_mixture, mixture_lengths)
             source = remove_pad(padded_source, mixture_lengths)
             # NOTE: use reorder estimate source
             estimate_source = remove_pad(reorder_estimate_source,

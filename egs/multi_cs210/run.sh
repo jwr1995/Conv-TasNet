@@ -15,7 +15,7 @@ export NCCL_IB_DISABLE=1
 
 #data=/home/will/data/dummy/cs21
 data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=1  # Modify this to control to start from which stage
+stage=2  # Modify this to control to start from which stage
 # -- END
 
 dumpdir=data  # directory to put generated json file
@@ -30,10 +30,10 @@ sample_rate=16000
 segment=2  # seconds
 cv_maxlen=3   # seconds
 # Network config
-N=512
-L=40
+N=256
+L=60
 B=256
-H=512
+H=384
 P=3
 X=8
 R=4

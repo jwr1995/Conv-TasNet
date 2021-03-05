@@ -52,7 +52,7 @@ parser.add_argument('--norm_type', default='gLN', type=str,
 parser.add_argument('--causal', type=int, default=0,
                     help='Causal (1) or noncausal(0) training')
 parser.add_argument('--mask_nonlinear', default='relu', type=str,
-                    choices=['relu', 'softmax'], help='non-linear to generate mask')
+                    choices=['relu', 'softmax','sigmoid'], help='non-linear to generate mask')
 # Training config
 parser.add_argument('--use_cuda', type=int, default=1,
                     help='Whether use GPU')
@@ -102,20 +102,24 @@ parser.add_argument('--visdom_id', default='TasNet training',
 parser.add_argument('--corpus',default='wsj0')
 parser.add_argument('--array',default='simu_non_linear')
 parser.add_argument('--multichannel',default=False, type=bool)
+parser.add_argument('--mode', default="ss", type=str)
+parser.add_argument('--subtract', default=False, type=bool)
 
 def main(args):
     # Construct Solver
     # data
     tr_dataset = AudioDataset(args.train_dir, args.batch_size, args=args,
-                              sample_rate=args.sample_rate, segment=args.segment)
+                              sample_rate=args.sample_rate, segment=args.segment,mode=args.mode)
     cv_dataset = AudioDataset(args.valid_dir, batch_size=1, args=args,  # 1 -> use less GPU memory to do cv
                               sample_rate=args.sample_rate,
-                              segment=-1, cv_maxlen=args.cv_maxlen)  # -1 -> use full audio
+                              segment=-1, cv_maxlen=args.cv_maxlen, mode=args.mode)  # -1 -> use full audio
     print(args.multichannel)
-    tr_loader = AudioDataLoader(multichannel=args.multichannel,dataset=tr_dataset, batch_size=1,
+    tr_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
+                                dataset=tr_dataset, batch_size=1,
                                 shuffle=args.shuffle,
                                 num_workers=args.num_workers)
-    cv_loader = AudioDataLoader(multichannel=args.multichannel,dataset=cv_dataset, batch_size=1,
+    cv_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
+                                dataset=cv_dataset, batch_size=1,
                                 num_workers=0)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model

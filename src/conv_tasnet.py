@@ -12,7 +12,7 @@ EPS = 1e-8
 
 class ConvTasNet(nn.Module):
     def __init__(self, N, L, B, H, P, X, R, C, norm_type="gLN", causal=False,
-                 mask_nonlinear='relu'):
+                 mask_nonlinear='relu',figures=False):
         """
         Args:
             N: Number of filters in autoencoder
@@ -37,6 +37,9 @@ class ConvTasNet(nn.Module):
         self.encoder = Encoder(L, N)
         self.separator = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
         self.decoder = Decoder(N, L)
+        self.figures=figures
+        self.mask=None
+
         # init
         for p in self.parameters():
             if p.dim() > 1:
@@ -57,7 +60,13 @@ class ConvTasNet(nn.Module):
         T_origin = mixture.size(-1)
         T_conv = est_source.size(-1)
         est_source = F.pad(est_source, (0, T_origin - T_conv))
+
+        if self.figures:
+            self.mask=est_mask
+
         return est_source
+
+    def get_mask(self): return self.mask
 
     @classmethod
     def load_model(cls, path):
@@ -97,13 +106,17 @@ class ConvTasNet(nn.Module):
 class Encoder(nn.Module):
     """Estimation of the nonnegative mixture weight by a 1-D conv layer.
     """
-    def __init__(self, L, N, multi=False):
+    def __init__(self, L, N, output_layer='relu', multi=False):
         super(Encoder, self).__init__()
         # Hyper-parameter
         self.L, self.N, self.multi = L, N, multi
         # Components
         # 50% overlap
         self.conv1d_U = nn.Conv1d(1, N, kernel_size=L, stride=L // 2, bias=False)
+        if output_layer=='sigmoid':
+            self.output_layer=F.sigmoid
+        else:
+            self.output_layer=F.relu
 
     def forward(self, mixture):
         """
@@ -114,7 +127,7 @@ class Encoder(nn.Module):
         """
 
         mixture = torch.unsqueeze(mixture, 1)  # [M, 1, T]
-        mixture_w = F.relu(self.conv1d_U(mixture))  # [M, N, K]
+        mixture_w = self.output_layer(self.conv1d_U(mixture))  # [M, N, K]
         return mixture_w
 
 
@@ -206,6 +219,8 @@ class TemporalConvNet(nn.Module):
             est_mask = F.softmax(score, dim=1)
         elif self.mask_nonlinear == 'relu':
             est_mask = F.relu(score)
+        elif self.mask_nonlinear == 'sigmoid':
+            est_mask = F.sigmoid(score)
         else:
             raise ValueError("Unsupported mask non-linear function")
         return est_mask

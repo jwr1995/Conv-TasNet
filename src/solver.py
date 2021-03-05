@@ -177,11 +177,13 @@ class Solver(object):
             #print(data)
             #if self.corpus=='wsj0':
             padded_mixture, mixture_lengths, padded_source = data
+
             if self.use_cuda:
                 padded_mixture = padded_mixture.cuda()
                 mixture_lengths = mixture_lengths.cuda()
                 padded_source = padded_source.cuda()
             estimate_source = self.model(padded_mixture)
+
             if self.C == 1:
                 loss = sisnr_loss(estimate_source,padded_source)
             else:

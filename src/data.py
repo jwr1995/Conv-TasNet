@@ -32,7 +32,8 @@ import librosa
 
 class AudioDataset(data.Dataset):
 
-    def __init__(self, json_dir, batch_size, args=None, sample_rate=8000, segment=4.0, cv_maxlen=8.0, multi=False):
+    def __init__(self, json_dir, batch_size, args=None, sample_rate=8000,
+                segment=4.0, cv_maxlen=8.0, multi=False, mode="ss"):
         """
         Args:
             json_dir: directory including mix.json, s1.json and s2.json
@@ -53,7 +54,7 @@ class AudioDataset(data.Dataset):
             mix_infos = json.load(f)
         with open(s1_json, 'r') as f:
             s1_infos = json.load(f)
-        if args.C == 2:
+        if args.corpus == "wsj0":
             with open(s2_json, 'r') as f:
                 s2_infos = json.load(f)
         # sort it by #samples (impl bucket)
@@ -61,9 +62,9 @@ class AudioDataset(data.Dataset):
             infos, key=lambda info: int(info[1]), reverse=True)
         sorted_mix_infos = sort(mix_infos)
         sorted_s1_infos = sort(s1_infos)
-
-        if args.C == 2:
+        if args.C == 2 and mode == "ss":
             sorted_s2_infos = sort(s2_infos)
+
         if segment >= 0.0:
             # segment length and count dropped utts
             segment_len = int(segment * sample_rate)  # 4s * 8000/s = 32000 samples
@@ -80,7 +81,7 @@ class AudioDataset(data.Dataset):
             while True:
                 num_segments = 0
                 end = start
-                if args.C == 1:
+                if args.corpus == "cs21":
                     part_mix, part_s1 = [], []
                 else:
                     part_mix, part_s1, part_s2 = [], [], []
@@ -95,11 +96,11 @@ class AudioDataset(data.Dataset):
                             break
                         part_mix.append(sorted_mix_infos[end])
                         part_s1.append(sorted_s1_infos[end])
-                        if args.C==2:
+                        if args.C==2 and mode=="ss":
                             part_s2.append(sorted_s2_infos[end])
                     end += 1
                 if len(part_mix) > 0:
-                    if args.C==2:
+                    if args.corpus == "wsj0":
                         minibatch.append([part_mix, part_s1, part_s2,
                                       sample_rate, segment_len])
                     else:
@@ -119,7 +120,7 @@ class AudioDataset(data.Dataset):
                 if args.corpus == "wsj0" and int(sorted_mix_infos[start][1]) > cv_maxlen * sample_rate:
                     start = end
                     continue
-                if args.C==2:
+                if args.corpus == "wsj0":
                     minibatch.append([sorted_mix_infos[start:end],
                                   sorted_s1_infos[start:end],
                                   sorted_s2_infos[start:end],
@@ -145,10 +146,12 @@ class AudioDataLoader(data.DataLoader):
     NOTE: just use batchsize=1 here, so drop_last=True makes no sense here.
     """
 
-    def __init__(self, multichannel=False, *args, **kwargs):
+    def __init__(self, multichannel=False, subtract=False, *args, **kwargs):
         super(AudioDataLoader, self).__init__(*args, **kwargs)
         if multichannel:
             self.collate_fn = _collate_fn_multi; return
+        elif subtract:
+            self.collate_fn = _collate_fn_substract; return
         self.collate_fn = _collate_fn
 
 def _collate_fn_multi(batch):
@@ -223,6 +226,42 @@ def _collate_fn(batch):
 
     return mixtures_pad, ilens, sources_pad
 
+def _collate_fn_substract(batch):
+    """
+    Args:
+        batch: list, len(batch) = 1. See AudioDataset.__getitem__()
+    Returns:
+        mixtures_pad: B x T, torch.Tensor
+        ilens : B, torch.Tentor
+        sources_pad: B x C x T, torch.Tensor
+    """
+    # batch should be located in list
+
+    assert len(batch) == 1
+
+    mixtures, sources = load_mixtures_and_sources(batch[0],multichannel=False,subtract=True)
+
+    # get batch of lengths of input sequences
+    ilens = np.array([mix.shape[0] for mix in mixtures])
+
+    # perform padding and convert to tensor
+    pad_value = 0
+
+    #print(np.array(mixtures).shape,np.array(sources).shape)
+    mixtures_pad = pad_list([torch.from_numpy(mix).float()
+                             for mix in mixtures], pad_value)
+    ilens = torch.from_numpy(ilens)
+
+    sources_pad = pad_list([torch.from_numpy(s).float()
+                            for s in sources], pad_value)
+    #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
+    # N x T x C -> N x C x T
+    sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
+    #sources_pad = sources_pad.reshape((sources_pad.shape[0], 1,
+    #                sources_pad.shape[1])).contiguous()
+#    print(mixtures_pad.size(),ilens.size(),sources_pad.size())
+
+    return mixtures_pad, ilens, sources_pad
 
 # Eval data part
 from preprocess import preprocess_one_dir
@@ -338,7 +377,7 @@ def normalize(sig, rms_level=0):
     return y
 
 # ------------------------------ utils ------------------------------------
-def load_mixtures_and_sources(batch, multichannel=False):
+def load_mixtures_and_sources(batch, multichannel=False, subtract=False):
     """
     Each info include wav path and wav duration.
     Returns:
@@ -358,7 +397,7 @@ def load_mixtures_and_sources(batch, multichannel=False):
     # for each utterance
 
     for packet in zipped:
-        if C==2:
+        if C==2 and not subtract:
             mix_info, s1_info, s2_info = packet
         else:
             mix_info, s1_info = packet
@@ -367,7 +406,7 @@ def load_mixtures_and_sources(batch, multichannel=False):
         mix_path = mix_info[0]
         s1_path = s1_info[0]
         assert mix_info[1] == s1_info[1]
-        if C==2:
+        if C==2 and not subtract:
             s2_path = s2_info[0]
             assert s1_info[1] == s2_info[1]
         # read wav file
@@ -384,9 +423,12 @@ def load_mixtures_and_sources(batch, multichannel=False):
 
         if C==2:
             s2 = sf.read(s2_path)[0].T
+        elif subtract:
+            s2 = mix-s1
+
 
         # merge s1 and s2
-        if C==2:
+        if C==2 or subtract:
             s = np.dstack((s1, s2))[0]  # T x C, C = 2
         else:
             s=s1

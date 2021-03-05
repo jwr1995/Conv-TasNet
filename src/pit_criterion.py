@@ -31,7 +31,7 @@ def cal_si_snr_with_pit(source, estimate_source, source_lengths):
         estimate_source: [B, C, T]
         source_lengths: [B], each item is between [0, T]
     """
-    #print(source.size(),estimate_source.size())
+    print(source.size(),estimate_source.size())
     assert source.size() == estimate_source.size()
     B, C, T = source.size()
     # mask padding position along T

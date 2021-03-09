@@ -14,7 +14,7 @@ EPS = 1e-8
 
 class MultiConvTasNet(nn.Module):
     def __init__(self, N, L, B, H, P, X, R, C, norm_type="gLN", causal=False,
-                 mask_nonlinear='relu', n_channels=8):
+                 mask_nonlinear='relu', n_channels=8, figures=False):
         """
         Args:
             N: Number of filters in autoencoder
@@ -46,6 +46,8 @@ class MultiConvTasNet(nn.Module):
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_normal_(p)
+        self.figures = None
+        self.mask = None
 
     def forward(self, mixture):
         """
@@ -63,7 +65,13 @@ class MultiConvTasNet(nn.Module):
         T_origin = mixture.size(-1)
         T_conv = est_source.size(-1)
         est_source = F.pad(est_source, (0, T_origin - T_conv))
+
+        if self.figures:
+            self.mask=est_mask
+
         return est_source
+
+    def get_mask(self): return self.mask
 
     @classmethod
     def load_model(cls, path):

@@ -85,7 +85,7 @@ def separate(args):
                 filename = os.path.join(args.out_dir,
                                         os.path.basename(filename).strip('.wav'))
                 if args.multichannel:
-                    write(normalize(mixture[i][0]), filename + '.wav',args.sample_rate)
+                    write((mixture[i][0]), filename + '.wav',args.sample_rate)
                 else:
                     write(mixture[i], filename + '.wav',args.sample_rate)
                 C = flat_estimate[i].shape[0]
@@ -96,7 +96,10 @@ def separate(args):
                 fig = plt.figure()
 
                 ax1 = fig.add_subplot(311)
-                ax1.specgram(normalize(mixture[i]),Fs=args.sample_rate,NFFT=256)
+                if not args.multichannel:
+                    ax1.specgram(normalize(mixture[i]),Fs=args.sample_rate,NFFT=256)
+                else:
+                    ax1.specgram(normalize(mixture[i][0]),Fs=args.sample_rate,NFFT=256)
                 ax1.title.set_text('Mixture')
                 import numpy as np
                 ax2 = fig.add_subplot(312)

@@ -79,6 +79,7 @@ print_freq=10
 visdom=0
 visdom_epoch=0
 visdom_id="Conv-TasNet Training"
+figures=True
 # evaluate
 ev_use_cuda=0
 cal_sdr=1
@@ -110,13 +111,13 @@ if [ -z ${tag} ]; then
 else
   expdir=exp/train_${tag}
 fi
-
+mkdir $expdir
 cp run.sh $expdir/run.sh
 
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
 #  ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
-    CUDA_LAUNCH_BLOCKING=1 \
+    #CUDA_LAUNCH_BLOCKING=1 \
     train.py \
     --train_dir $train_dir \
     --valid_dir $valid_dir \
@@ -158,28 +159,29 @@ if [ $stage -le 2 ]; then
 fi
 
 
-#if [ $stage -le 3 ]; then
-#  echo "Stage 3: Evaluate separation performance"
-# # ${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
-#    evaluate.py \
-#    --model_path ${expdir}/final.pth.tar \
-#    --data_dir $evaluate_dir \
-#    --cal_sdr $cal_sdr \
-#    --use_cuda $ev_use_cuda \
-#    --sample_rate $sample_rate \
-#    --batch_size $batch_size
-#fi
+if [ $stage -le 3 ]; then
+ echo "Stage 3: Evaluate separation performance"
+# ${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
+   evaluate.py \
+   --model_path ${expdir}/final.pth.tar \
+   --data_dir $evaluate_dir \
+   --cal_sdr $cal_sdr \
+   --use_cuda $ev_use_cuda \
+   --sample_rate $sample_rate \
+   --batch_size $batch_size
+fi
 
 
-#if [ $stage -le 4 ]; then
-#  echo "Stage 4: Separate speech using Conv-TasNet"
-#  separate_out_dir=${expdir}/separate
-# # ${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
-#    separate.py \
-#    --model_path ${expdir}/final.pth.tar \
-#    --mix_json $separate_dir/mix.json \
-#    --out_dir ${separate_out_dir} \
-#    --use_cuda $ev_use_cuda \
-#    --sample_rate $sample_rate \
-#    --batch_size $batch_size
-#fi
+if [ $stage -le 4 ]; then
+ echo "Stage 4: Separate speech using Conv-TasNet"
+ separate_out_dir=${expdir}/separate
+# ${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
+   separate.py \
+   --model_path ${expdir}/final.pth.tar \
+   --mix_json $separate_dir/mix.json \
+   --out_dir ${separate_out_dir} \
+   --use_cuda $ev_use_cuda \
+   --sample_rate $sample_rate \
+   --batch_size $batch_size \
+   --figures $figures
+fi

@@ -66,6 +66,7 @@ visdom_id="Conv-TasNet Training"
 # evaluate
 ev_use_cuda=1
 cal_sdr=1
+figures=True
 
 #corpus params
 corpus=cs21
@@ -173,6 +174,7 @@ if [ $stage -le 4 ]; then
     --sample_rate $sample_rate \
     --batch_size $batch_size \
     --num_workers $num_workers \
-    --multichannel $multichannel
+    --multichannel $multichannel \
+    --figure $figures
     > $expdir/separate.log
 fi

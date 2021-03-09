@@ -6,25 +6,31 @@
 # Author: William Ravenscroft
 source /share/mini1/usr/will/miniconda3/bin/activate
 conda init
+conda activate cs21
 
-if [[ $(hostname) = node27 ]]
-then
-  conda activate torch11
-  echo "Using environment: torch11"
-else
-  conda activate cs21
-  echo "Using environment: cs21"
-fi
+#export NCCL_SOCKET_IFNAME=ib0
+#export NCCL_IB_DISABLE=1
+#export NCCL_IB_TC=1
+#export NCCL_IB_CUDA_SUPPORT=0
+#export NCCL_DEBUG=WARN
+#export NCCL_SOCKET_NTHREADS=24
+#export NCCL_IGNORE_CPU_AFFINITY=1
+#export NCCL_SHM_DISABLE=1
+#export NCCL_P2P_DISABLE=1
+#export NCCL_P2P_LEVEL=0
+#export NCCL_LAUNCH_MODE=PARALLEL
+#export NCCL_IB_HCA=mlx5_1:0:1
+#export NCCL_NET_GDR_LEVEL=0
 
-#export LDLIBRARYPATH=/share/mini1/sw/std/cuda/
-#_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
-
-export NCCL_SOCKET_IFNAME=virbr0
-export NCCL_IB_DISABLE=1
+#echo $NCCL_SOCKET_IFNAME
+#echo $NCCL_IB_DISABLE
 
 #data=/home/will/data/dummy/cs21
 data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
-stage=2  # Modify this to control to start from which stage
+stage=1  # Modify this to control to start from which stage
+
+#export LDLIBRARYPATH=/share/mini1/sw/std/cuda/
+#_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
 
 dumpdir=data  # directory to put generated json file
 
@@ -33,59 +39,57 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=4
+percentage=0.5
 sample_rate=16000
-segment=2  # seconds
-cv_maxlen=3   # seconds
+segment=3  # seconds
+cv_maxlen=3  # seconds
 # Network config
 N=256
-L=60
-B=256
-H=384
+#L=$(((SGE_TASK_ID+1)*80))
+L=80
+B=128
+H=256
 P=3
 X=8
-R=4
+R=3
 norm_type=gLN
-causal=1
-mask_nonlinear='sigmoid'
+causal=0
+mask_nonlinear='softmax'
 C=1
 # Training config
 use_cuda=1
-id=0,1,2,3
 epochs=50
 half_lr=1
-early_stop=0
-max_norm=3
+early_stop=1
+max_norm=5
 # minibatch
 shuffle=1
 batch_size=16
 num_workers=4
 # optimizer
 optimizer=adam
-lr=1e-4
+lr=1e-3
 momentum=0
-l2=0.01
+l2=0
 # save and visualize
 checkpoint=1
-continue_from="exp/train_BIG/epoch29.pth.tar"
+continue_from=""
 print_freq=10
 visdom=0
 visdom_epoch=0
 visdom_id="Conv-TasNet Training"
-# evaluate
-ev_use_cuda=1
-cal_sdr=1
 figures=True
+# evaluate
+ev_use_cuda=0
+cal_sdr=1
 
-#corpus params
+# add-ons
 corpus=cs21
 array=simu_non_uniform
-multichannel=True
-
 # -- END Conv-TasNet Config
 
 # exp tag
-tag="BIG" # tag for managing experiments.
+tag="" # tag for managing experiments.
 
 ngpu=1  # always 1
 
@@ -106,13 +110,13 @@ if [ -z ${tag} ]; then
 else
   expdir=exp/train_${tag}
 fi
-
 mkdir $expdir
 cp run.sh $expdir/run.sh
 
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
-  #${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
+#  ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
+    #CUDA_LAUNCH_BLOCKING=1 \
     train.py \
     --train_dir $train_dir \
     --valid_dir $valid_dir \
@@ -150,39 +154,33 @@ if [ $stage -le 2 ]; then
     --visdom_epoch $visdom_epoch \
     --visdom_id "$visdom_id"\
     --corpus $corpus \
-    --array $array \
-    --multichannel $multichannel \
-    >> $expdir/train.log
+    --array $array
 fi
-cp run.sh.log $expdir/run.sh.log
+
 
 if [ $stage -le 3 ]; then
-  echo "Stage 3: Evaluate separation performance"
-  #${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
-    evaluate.py \
-    --model_path ${expdir}/final.pth.tar \
-    --data_dir $evaluate_dir \
-    --cal_sdr $cal_sdr \
-    --use_cuda $ev_use_cuda \
-    --sample_rate $sample_rate \
-    --batch_size $batch_size \
-    --multichannel $multichannel \
-    > $expdir/eval.log
+ echo "Stage 3: Evaluate separation performance"
+# ${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
+   evaluate.py \
+   --model_path ${expdir}/final.pth.tar \
+   --data_dir $evaluate_dir \
+   --cal_sdr $cal_sdr \
+   --use_cuda $ev_use_cuda \
+   --sample_rate $sample_rate \
+   --batch_size $batch_size
 fi
 
+
 if [ $stage -le 4 ]; then
-  echo "Stage 4: Separate speech using Conv-TasNet"
-  separate_out_dir=${expdir}/separate
-  #${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
-    separate.py \
-    --model_path ${expdir}/final.pth.tar \
-    --mix_json $separate_dir/mix.json \
-    --out_dir ${separate_out_dir} \
-    --use_cuda $ev_use_cuda \
-    --sample_rate $sample_rate \
-    --batch_size $batch_size \
-    --num_workers $num_workers \
-    --multichannel $multichannel \
-    --figure $figures
-    > $expdir/separate.log
+ echo "Stage 4: Separate speech using Conv-TasNet"
+ separate_out_dir=${expdir}/separate
+# ${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
+   separate.py \
+   --model_path ${expdir}/final.pth.tar \
+   --mix_json $separate_dir/mix.json \
+   --out_dir ${separate_out_dir} \
+   --use_cuda $ev_use_cuda \
+   --sample_rate $sample_rate \
+   --batch_size $batch_size \
+   --figures $figures
 fi

@@ -9,7 +9,7 @@ import torch
 from pit_criterion import cal_loss
 from loss import sisnr_loss
 
-torch.autograd.set_detect_anomaly(True)
+#torch.autograd.set_detect_anomaly(True)
 
 
 class Solver(object):
@@ -192,15 +192,10 @@ class Solver(object):
             if not cross_valid:
                 self.optimizer.zero_grad()
                 try:
-                    loss.backward(retain_graph=True)
-                    #print(model.spatial_encoder.lstm.graph.parameters())
-                    #print("Gone backwards")
-                    #if self.max_grad_clip > 0:
-                    #torch.nn.utils.clip_grad_value_(self.model.parameters(), 1)
-                except Exception as e:
-                    print("Error on epoch",str(epoch),"iteration",str(i),". Loss =",loss.item())
-                    continue
-                first=False
+                    loss.backward(retain_graph=True)               
+                except:
+                    print("Error on iteration",str(i))
+                    continue    
 
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(),
                                                self.max_norm)

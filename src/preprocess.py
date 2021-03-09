@@ -47,7 +47,10 @@ def preprocess(args):
     elif args.corpus == 'cs21':
         for data_type in ['train', 'dev', 'eval']:
             num_files = len(os.listdir(os.path.abspath(os.path.join(args.in_dir, data_type, args.array, "mix"))))
-            entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
+            if data_type == 'train':
+            	entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
+            if data_type == 'dev':
+            	entries = [bool(random.randrange(100) < args.percentage*20) for i in range(num_files)]
             for source in ['mix', 'noreverb_ref']:
                 preprocess_one_dir(os.path.join(args.in_dir, data_type, args.array, source),
                                    os.path.join(args.out_dir, data_type),

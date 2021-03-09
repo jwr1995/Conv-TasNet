@@ -6,7 +6,16 @@
 # Author: William Ravenscroft
 source /share/mini1/usr/will/miniconda3/bin/activate
 conda init
-conda activate cs21
+
+if [[ $(hostname) = node27 ]]
+then
+  conda activate torch11
+  echo "Using environment: torch11"
+else
+  conda activate cs21
+  echo "Using environment: cs21"
+fi
+
 #export LDLIBRARYPATH=/share/mini1/sw/std/cuda/
 #_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
 
@@ -24,7 +33,7 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=8
+percentage=4
 sample_rate=16000
 segment=2  # seconds
 cv_maxlen=3   # seconds
@@ -38,7 +47,7 @@ X=8
 R=4
 norm_type=gLN
 causal=1
-mask_nonlinear='relu'
+mask_nonlinear='sigmoid'
 C=1
 # Training config
 use_cuda=1
@@ -46,19 +55,19 @@ id=0,1,2,3
 epochs=50
 half_lr=1
 early_stop=0
-max_norm=4
+max_norm=3
 # minibatch
 shuffle=1
-batch_size=4
+batch_size=16
 num_workers=4
 # optimizer
 optimizer=adam
-lr=5e-3
+lr=1e-4
 momentum=0
-l2=0
+l2=0.01
 # save and visualize
 checkpoint=1
-continue_from=""
+continue_from="exp/train_BIG/epoch29.pth.tar"
 print_freq=10
 visdom=0
 visdom_epoch=0
@@ -102,7 +111,6 @@ cp run.sh $expdir/run.sh
 
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
-  touch $expdir/train.log
   #${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
     train.py \
     --train_dir $train_dir \
@@ -143,7 +151,7 @@ if [ $stage -le 2 ]; then
     --corpus $corpus \
     --array $array \
     --multichannel $multichannel \
-    > $expdir/train.log
+    >> $expdir/train.log
 fi
 cp run.sh.log $expdir/run.sh.log
 

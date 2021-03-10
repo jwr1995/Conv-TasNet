@@ -38,8 +38,6 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=
 
 def preprocess(args):
     for data_type in ['eval']:
-        num_files = len(os.listdir(os.path.abspath(os.path.join(args.in_dir, data_type, args.array, "mix"))))
-        entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
         for source in ['real-recording', 'semi-real-playback','semi-real-realspk']:
             preprocess_one_dir(os.path.join(args.in_dir, source,1),
                                os.path.join(args.out_dir, data_type),

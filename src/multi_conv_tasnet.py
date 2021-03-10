@@ -46,7 +46,7 @@ class MultiConvTasNet(nn.Module):
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_normal_(p)
-        self.figures = None
+        self.figures = figures
         self.mask = None
 
     def forward(self, mixture):

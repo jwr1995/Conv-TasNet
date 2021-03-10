@@ -362,20 +362,6 @@ def _collate_fn_eval_multi(batch):
     ilens = torch.from_numpy(ilens)
     return mixtures_pad, ilens, filenames
 
-def rms_normalize(sig, rms_level=0):
-    """
-    https://superkogito.github.io/blog/rmsnormalization.html
-    """
-
-    # linear rms level and scaling factor
-    r = 10**(rms_level / 10.0)
-    a = np.sqrt( (len(sig) * r**2) / np.sum(sig**2) )
-
-    # normalize
-    y = sig * a
-
-    return y
-
 def normalize(sig):
     max_value = np.max(np.abs(sig))
     sig = (1.0/max_value)*sig

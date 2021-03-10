@@ -52,7 +52,7 @@ C=1
 # Training config
 use_cuda=1
 id=0,1,2,3
-epochs=50
+epochs=100
 half_lr=1
 early_stop=0
 max_norm=3
@@ -62,12 +62,12 @@ batch_size=16
 num_workers=4
 # optimizer
 optimizer=adam
-lr=1e-4
+lr=3e-4
 momentum=0
 l2=0.01
 # save and visualize
 checkpoint=1
-continue_from="exp/train_BIG/epoch29.pth.tar"
+continue_from="exp/train_BIG/epoch41.pth.tar"
 print_freq=10
 visdom=0
 visdom_epoch=0

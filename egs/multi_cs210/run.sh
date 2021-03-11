@@ -67,7 +67,7 @@ momentum=0
 l2=0.01
 # save and visualize
 checkpoint=1
-continue_from="exp/train_BIG/epoch41.pth.tar"
+continue_from="exp/train_BIG/epoch51.pth.tar"
 print_freq=10
 visdom=0
 visdom_epoch=0

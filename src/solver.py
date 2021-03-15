@@ -176,12 +176,14 @@ class Solver(object):
             #if i<1700: continue
             #print(data)
             #if self.corpus=='wsj0':
+            #print(data[0],data[1],data[2],data[3]); exit()
             padded_mixture, mixture_lengths, padded_source = data
 
             if self.use_cuda:
                 padded_mixture = padded_mixture.cuda()
                 mixture_lengths = mixture_lengths.cuda()
                 padded_source = padded_source.cuda()
+            print(padded_source.shape)
             estimate_source = self.model(padded_mixture)
 
             if self.C == 1:
@@ -192,35 +194,16 @@ class Solver(object):
             if not cross_valid:
                 self.optimizer.zero_grad()
                 try:
-                    loss.backward(retain_graph=True)               
+                    loss.backward(retain_graph=True)
                 except:
                     print("Error on iteration",str(i))
-                    continue    
+                    continue
 
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(),
                                                self.max_norm)
                 self.optimizer.step()
 
             total_loss += loss.item()
-            # else:
-            #     mix, ref = data
-            #     if self.use_cuda:
-            #         mix = mix.cuda()
-            #         ref = ref.cuda()
-            #     print(mix.shape,ref.shape);
-            #     estimate = self.model(mix)
-            #     source_lengths = torch.Tensor([samples for samples in estimate[:,1]])
-            #     print(source_lengths.shape);exit()
-            #     loss, max_snr, estimate_source, reorder_estimate_source = \
-            #         cal_loss(ref, estimate, source_lengths)
-            #     if not cross_valid:
-            #         self.optimizer.zero_grad()
-            #         loss.backward()
-            #         torch.nn.utils.clip_grad_norm_(self.model.parameters(),
-            #                                        self.max_norm)
-            #         self.optimizer.step()
-            #
-            #     total_loss += loss.item()
 
             if i % self.print_freq == 0:
                 print('Epoch {0} | Iter {1} | Average Loss {2:.3f} | '

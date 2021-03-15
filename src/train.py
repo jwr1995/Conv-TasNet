@@ -104,15 +104,19 @@ parser.add_argument('--array',default='simu_non_linear')
 parser.add_argument('--multichannel',default=False, type=bool)
 parser.add_argument('--mode', default="ss", type=str)
 parser.add_argument('--subtract', default=False, type=bool)
+parser.add_argument('--mix-label',default='mix',type=str)
 
 def main(args):
     # Construct Solver
     # data
     tr_dataset = AudioDataset(args.train_dir, args.batch_size, args=args,
-                              sample_rate=args.sample_rate, segment=args.segment,mode=args.mode)
+                              sample_rate=args.sample_rate,
+                              segment=args.segment, mode=args.mode,
+                              mix_label=args.mix_label)
     cv_dataset = AudioDataset(args.valid_dir, batch_size=1, args=args,  # 1 -> use less GPU memory to do cv
                               sample_rate=args.sample_rate,
-                              segment=-1, cv_maxlen=args.cv_maxlen, mode=args.mode)  # -1 -> use full audio
+                              segment=-1, cv_maxlen=args.cv_maxlen,
+                              mode=args.mode, mix_label=args.mix_label)  # -1 -> use full audio
     print(args.multichannel)
     tr_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
                                 dataset=tr_dataset, batch_size=1,

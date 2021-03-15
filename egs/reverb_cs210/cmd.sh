@@ -14,9 +14,6 @@ export train_cmd="run.pl --mem 2G"
 export cuda_cmd="run.pl --mem 2G --gpu 1"
 export decode_cmd="run.pl --mem 4G"
 
-#cmdgpu="-p MINI -q GPU -o -l hostname=node23|node24|node25|node26 -eo"
-#export cuda_cmd="/share/mini1/sw/mini/jet/latest/tools/submitjob $cmdgpu"
-
 #export train_cmd="queue.pl --mem 2G"
 #export decode_cmd="queue.pl --mem 4G"
 # the use of cuda_cmd is deprecated, used only in 'nnet1',

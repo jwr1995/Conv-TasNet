@@ -37,26 +37,12 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=
 
 
 def preprocess(args):
-    if args.corpus == 'wsj0':
-        for data_type in ['tr', 'cv', 'tt']:
-            for speaker in ['mix', 's1', 's2']:
-                preprocess_one_dir(os.path.join(args.in_dir, data_type, speaker),
-                                   os.path.join(args.out_dir, data_type),
-                                   speaker,
-                                   sample_rate=args.sample_rate)
-    elif args.corpus == 'cs21':
-        for data_type in ['train', 'dev']:
-            num_files = len(os.listdir(os.path.abspath(os.path.join(args.in_dir,
-                        data_type, args.array, args.mix_label))))
-            if data_type == 'train':
-            	entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
-            if data_type == 'dev':
-            	entries = [bool(random.randrange(100) < args.percentage*20) for i in range(num_files)]
-            for source in [args.mix_label, 'noreverb_ref']:
-                preprocess_one_dir(os.path.join(args.in_dir, data_type, args.array, source),
-                                   os.path.join(args.out_dir, data_type),
-                                   source,
-                                   sample_rate=args.sample_rate, entries=entries)
+    for data_type in ['dev']:
+        for source in ['mix', 'noreverb_ref',]:
+            preprocess_one_dir(os.path.join(args.in_dir, source),
+                               os.path.join(args.out_dir, data_type),
+                               source,
+                               sample_rate=args.sample_rate)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Corpus data preprocessing")
@@ -72,7 +58,6 @@ if __name__ == "__main__":
                         help='Set corpus')
     parser.add_argument('--array', type=str, default='simu_non_uniform')
     parser.add_argument('--percentage', type=float, default=20.0)
-    parser.add_argument('--mix-label', type=str, default="mix")
     args = parser.parse_args()
     print(args)
     preprocess(args)

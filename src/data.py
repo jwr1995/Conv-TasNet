@@ -21,6 +21,8 @@ Output:
 import json
 import math
 import os
+import glob
+import csv
 import soundfile as sf
 
 import numpy as np
@@ -29,11 +31,12 @@ import torch.utils.data as data
 
 import librosa
 
+from signalprocessing import rms
 
 class AudioDataset(data.Dataset):
 
     def __init__(self, json_dir, batch_size, args=None, sample_rate=8000,
-                segment=4.0, cv_maxlen=8.0, multi=False, mode="ss"):
+                segment=4.0, cv_maxlen=8.0, multi=False, mode="ss", mix_label="mix"):
         """
         Args:
             json_dir: directory including mix.json, s1.json and s2.json
@@ -43,11 +46,12 @@ class AudioDataset(data.Dataset):
         """
         super(AudioDataset, self).__init__()
         self.multi=multi
+        self.mix_label=mix_label
         if  args.corpus == "cs21":
-            mix_json = os.path.join(json_dir, 'mix.json')
+            mix_json = os.path.join(json_dir, self.mix_label+'.json')
             s1_json = os.path.join(json_dir, 'noreverb_ref.json')
         elif args.corpus == "wsj0":
-            mix_json = os.path.join(json_dir, 'mix.json')
+            mix_json = os.path.join(json_dir, self.mix_label+'.json')
             s1_json = os.path.join(json_dir, 's1.json')
             s2_json = os.path.join(json_dir, 's2.json')
         with open(mix_json, 'r') as f:
@@ -140,54 +144,38 @@ class AudioDataset(data.Dataset):
     def __len__(self):
         return len(self.minibatch)
 
+_MULTICHANNEL=False
+_SUBTRACT=False
+_USE_RMS=False
+_RMS_MEAN=0.002
+_RMS_VAR=0.001
+
+def process_rms_csv(filename):
+    with open(filename,'r') as f:
+        reader=csv.reader(f)
+        rms_table=[]
+        for i, row in enumerate(reader):
+            rms_table.append(float(row[1]))
+        mean=np.mean(np.array(rms_table))
+        variance=np.var(np.array(rms_table))
+    return mean, variance
 
 class AudioDataLoader(data.DataLoader):
     """
     NOTE: just use batchsize=1 here, so drop_last=True makes no sense here.
     """
 
-    def __init__(self, multichannel=False, subtract=False, *args, **kwargs):
+    def __init__(self, multichannel=False, subtract=False, mix_label=None,
+                rms_dir=None,*args, **kwargs):
         super(AudioDataLoader, self).__init__(*args, **kwargs)
-        if multichannel:
-            self.collate_fn = _collate_fn_multi; return
-        elif subtract:
-            self.collate_fn = _collate_fn_substract; return
+        global _MULTICHANNEL, _SUBTRACT, _RMS_MEAN, _RMS_VAR, _USE_RMS
+        _MULTICHANNEL=multichannel
+        _SUBTRACT=subtract
+        if not rms_dir==None:
+            _USE_RMS=True
+            for filename in glob.glob(rms_dir+"/*.csv"):
+                _RMS_MEAN, _RMS_VAR=process_rms_csv(filename)
         self.collate_fn = _collate_fn
-
-def _collate_fn_multi(batch):
-    """
-    Args:
-        batch: list, len(batch) = 1. See AudioDataset.__getitem__()
-    Returns:
-        mixtures_pad: B x T, torch.Tensor
-        ilens : B, torch.Tentor
-        sources_pad: B x C x T, torch.Tensor
-    """
-    # batch should be located in list
-    assert len(batch) == 1
-
-    mixtures, sources = load_mixtures_and_sources(batch[0], True)
-
-    # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[1] for mix in mixtures])
-    # perform padding and convert to tensor
-    pad_value = 0
-
-    #print(np.array(mixtures).shape,np.array(sources).shape)
-    mixtures_pad = pad_list([torch.from_numpy(mix).float()
-                             for mix in mixtures], pad_value)
-    ilens = torch.from_numpy(ilens)
-    sources_pad = pad_list([torch.from_numpy(s).float()
-                            for s in sources], pad_value)
-    #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
-    # N x T x C -> N x C x T
-    #
-    sources_pad = sources_pad.reshape((sources_pad.shape[0], 1,
-                    sources_pad.shape[1])).contiguous()
-#    print(mixtures_pad.size(),ilens.size(),sources_pad.size())
-
-    return mixtures_pad, ilens, sources_pad
-
 
 def _collate_fn(batch):
     """
@@ -199,14 +187,14 @@ def _collate_fn(batch):
         sources_pad: B x C x T, torch.Tensor
     """
     # batch should be located in list
-
     assert len(batch) == 1
-
-    mixtures, sources = load_mixtures_and_sources(batch[0],multichannel=False)
+    global _MULTICHANNEL, _SUBTRACT
+    mixtures, sources = load_mixtures_and_sources(batch[0],
+                        multichannel=_MULTICHANNEL,
+                        subtract=_SUBTRACT)
 
     # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[0] for mix in mixtures])
-
+    ilens = np.array([mix.shape[bool(_MULTICHANNEL)] for mix in mixtures])
     # perform padding and convert to tensor
     pad_value = 0
 
@@ -214,61 +202,25 @@ def _collate_fn(batch):
     mixtures_pad = pad_list([torch.from_numpy(mix).float()
                              for mix in mixtures], pad_value)
     ilens = torch.from_numpy(ilens)
-
     sources_pad = pad_list([torch.from_numpy(s).float()
                             for s in sources], pad_value)
     #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
     # N x T x C -> N x C x T
-    #sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
-    sources_pad = sources_pad.reshape((sources_pad.shape[0], 1,
+    if _SUBTRACT:
+        sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
+    else:
+        sources_pad = sources_pad.reshape((sources_pad.shape[0], 1,
                     sources_pad.shape[1])).contiguous()
-#    print(mixtures_pad.size(),ilens.size(),sources_pad.size())
 
     return mixtures_pad, ilens, sources_pad
 
-def _collate_fn_substract(batch):
-    """
-    Args:
-        batch: list, len(batch) = 1. See AudioDataset.__getitem__()
-    Returns:
-        mixtures_pad: B x T, torch.Tensor
-        ilens : B, torch.Tentor
-        sources_pad: B x C x T, torch.Tensor
-    """
-    # batch should be located in list
-
-    assert len(batch) == 1
-
-    mixtures, sources = load_mixtures_and_sources(batch[0],multichannel=False,subtract=True)
-
-    # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[0] for mix in mixtures])
-
-    # perform padding and convert to tensor
-    pad_value = 0
-
-    #print(np.array(mixtures).shape,np.array(sources).shape)
-    mixtures_pad = pad_list([torch.from_numpy(mix).float()
-                             for mix in mixtures], pad_value)
-    ilens = torch.from_numpy(ilens)
-
-    sources_pad = pad_list([torch.from_numpy(s).float()
-                            for s in sources], pad_value)
-    #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
-    # N x T x C -> N x C x T
-    sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
-    #sources_pad = sources_pad.reshape((sources_pad.shape[0], 1,
-    #                sources_pad.shape[1])).contiguous()
-#    print(mixtures_pad.size(),ilens.size(),sources_pad.size())
-
-    return mixtures_pad, ilens, sources_pad
 
 # Eval data part
 from preprocess import preprocess_one_dir
 
 class EvalDataset(data.Dataset):
 
-    def __init__(self, mix_dir, mix_json, batch_size, sample_rate=8000):
+    def __init__(self, mix_dir, mix_json, batch_size, sample_rate=8000, mix_label="mix"):
         """
         Args:
             mix_dir: directory including mixture wav files
@@ -278,9 +230,9 @@ class EvalDataset(data.Dataset):
         assert mix_dir != None or mix_json != None
         if mix_dir is not None:
             # Generate mix.json given mix_dir
-            preprocess_one_dir(mix_dir, mix_dir, 'mix',
+            preprocess_one_dir(mix_dir, mix_dir, mix_label,
                                sample_rate=sample_rate)
-            mix_json = os.path.join(mix_dir, 'mix.json')
+            mix_json = os.path.join(mix_dir, mix_label+'.json')
         with open(mix_json, 'r') as f:
             mix_infos = json.load(f)
         # sort it by #samples (impl bucket)
@@ -312,8 +264,8 @@ class EvalDataLoader(data.DataLoader):
     """
     def __init__(self, multichannel=False, *args, **kwargs):
         super(EvalDataLoader, self).__init__(*args, **kwargs)
-        if multichannel:
-            self.collate_fn = _collate_fn_eval_multi; return
+        global _MULTICHANNEL
+        _MULTICHANNEL = multichannel
         self.collate_fn = _collate_fn_eval
 
 def _collate_fn_eval(batch):
@@ -325,50 +277,32 @@ def _collate_fn_eval(batch):
         ilens : B, torch.Tentor
         filenames: a list contain B strings
     """
+    global _MULTICHANNEL
     # batch should be located in list
     assert len(batch) == 1
     mixtures, filenames = load_mixtures(batch[0])
 
     # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[0] for mix in mixtures])
+    ilens = np.array([mix.shape[int(_MULTICHANNEL)] for mix in mixtures])
 
     # perform padding and convert to tensor
     pad_value = 0
     mixtures_pad = pad_list([torch.from_numpy(mix).float()
-                             for mix in mixtures], pad_value)
+                             for mix in mixtures], pad_value, multichannel=_MULTICHANNEL)
     ilens = torch.from_numpy(ilens)
     return mixtures_pad, ilens, filenames
 
-def _collate_fn_eval_multi(batch):
-    """
-    Args:
-        batch: list, len(batch) = 1. See AudioDataset.__getitem__()
-    Returns:
-        mixtures_pad: B x T, torch.Tensor
-        ilens : B, torch.Tentor
-        filenames: a list contain B strings
-    """
-    # batch should be located in list
-    assert len(batch) == 1
-    mixtures, filenames = load_mixtures(batch[0], multichannel=True)
 
-    # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[1] for mix in mixtures])
-
-    # perform padding and convert to tensor
-    pad_value = 0
-    mixtures_pad = pad_list([torch.from_numpy(mix).float()
-                             for mix in mixtures], pad_value)
-    ilens = torch.from_numpy(ilens)
-    return mixtures_pad, ilens, filenames
-
-def normalize(sig):
-    max_value = np.max(np.abs(sig))
-    sig = (1.0/max_value)*sig
+def rms_normalize(sig, rms_value=0.5):
+    sig = sig*(rms_value/rms(sig))
     return sig
 
+def peak_normalize(sig):
+    max_val = np.max(np.abs(sig))
+    return sig*(1/max_val)
+
 # ------------------------------ utils ------------------------------------
-def load_mixtures_and_sources(batch, multichannel=False, subtract=False):
+def load_mixtures_and_sources(batch, multichannel=False, subtract=False, eval=False):
     """
     Each info include wav path and wav duration.
     Returns:
@@ -406,17 +340,27 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False):
         if multichannel == False:
             # 1 x samples
             mix = sf.read(mix_path)[0].T[channel]
-            s1 = normalize(sf.read(s1_path)[0].T[channel])
+            if eval:
+                s1 = sf.read(s1_path)[0].T[channel]
+            else:
+                s1 = rms_normalize(sf.read(s1_path)[0].T[channel],rms_value=0.2)
         else:
             # channels x samples
             mix = sf.read(mix_path)[0].T
-            s1 = normalize(sf.read(s1_path)[0].T[0])
+            if eval:
+                s1 = rms_normalize(sf.read(s1_path)[0].T[0],rms_value=0.2)
+            else:
+                s1 = rms_normalize(sf.read(s1_path)[0].T[0],rms_value=0.2)
 
         if C==2:
-            s2 = sf.read(s2_path)[0].T
+            s2 = rms_normalize(sf.read(s2_path)[0].T,rms_value=0.2)
         elif subtract:
             s2 = mix-s1
 
+        global _USE_RMS
+        if _USE_RMS:
+            global _RMS_MEAN, _RMS_VAR
+            mix = rms_normalize(mix,np.random.normal(_RMS_MEAN,_RMS_VAR))
 
         # merge s1 and s2
         if C==2 or subtract:
@@ -426,7 +370,7 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False):
             #s = np.dstack((s1))[0]
         utt_len = mix.shape[-1]
         if segment_len >= 0:
-            # segment
+            # segmentAudioDataset
             for i in range(0, utt_len - segment_len + 1, segment_len):
                 if not multichannel:
                     mixtures.append(mix[i:i+segment_len])
@@ -444,14 +388,14 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False):
             sources.append(s)
     return mixtures, sources
 
-
-def load_mixtures(batch,multichannel=False):
+def load_mixtures(batch):
     """
     Returns:
         mixtures: a list containing B items, each item is T np.ndarray
         filenames: a list containing B strings
         T varies from item to item.
     """
+    global _MULTICHANNEL
     mixtures, filenames = [], []
     mix_infos, sample_rate = batch
     if (len(mix_infos[0]))==4: C=1
@@ -461,7 +405,7 @@ def load_mixtures(batch,multichannel=False):
         mix_path = mix_info[0]
         # read wav file
         if C == 1:
-            if not multichannel:
+            if not _MULTICHANNEL:
                 channel = mix_info[-1]
                 mix = sf.read(mix_path)[0].T[channel]
             else:
@@ -473,13 +417,27 @@ def load_mixtures(batch,multichannel=False):
         filenames.append(mix_path)
     return mixtures, filenames
 
-
-def pad_list(xs, pad_value):
+def pad_list(xs, pad_value,multichannel=False):
+    #print(xs); exit()
     n_batch = len(xs)
-    max_len = max(x.size(0) for x in xs)
-    pad = xs[0].new(n_batch, max_len, * xs[0].size()[1:]).fill_(pad_value)
-    for i in range(n_batch):
-        pad[i, :xs[i].size(0)] = xs[i]
+
+    if multichannel:
+        pos = 1
+    else:
+        pos = 0
+
+    max_len = max(x.size(pos) for x in xs)
+
+
+    #print(max_len);exit()
+    if multichannel:
+        pad = xs[0].new(n_batch, xs[0].size()[0], max_len).fill_(pad_value)
+        for i in range(n_batch):
+            pad[i, :, :xs[i].size(1)] = xs[i]
+    else:
+        pad = xs[0].new(n_batch, max_len, * xs[0].size()[1:]).fill_(pad_value)
+        for i in range(n_batch):
+            pad[i, :xs[i].size(0)] = xs[i]
     return pad
 
 

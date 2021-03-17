@@ -11,11 +11,12 @@ from mir_eval.separation import bss_eval_sources
 import numpy as np
 import torch
 
-from data import AudioDataLoader, AudioDataset, normalize
+from data import AudioDataLoader, AudioDataset
 from pit_criterion import cal_loss
 from conv_tasnet import ConvTasNet
 from multi_conv_tasnet import  MultiConvTasNet
 from utils import remove_pad
+
 
 
 parser = argparse.ArgumentParser('Evaluate separation performance using Conv-TasNet')
@@ -34,9 +35,25 @@ parser.add_argument('--batch_size', default=1, type=int,
 parser.add_argument('--corpus', default="cs21", type=str)
 parser.add_argument('--C', default=1, type=int)
 parser.add_argument('--multichannel',default=False, type=bool)
-parser.add_argument('--mix-label',default="mix",type=str)
+parser.add_argument('--mix-label',default='mix',type=str)
+
+def si_snr(estimated, original, eps=1e-8):
+    # estimated = remove_dc(estimated)
+    # original = remove_dc(original)
+    target = pow_norm(estimated, original) * original / pow_np_norm(original)
+    noise = estimated - target
+    return 10 * np.log10((pow_np_norm(target) + eps) / (pow_np_norm(noise) + eps))
+
+def pow_norm(s1, s2):
+    return np.sum(s1 * s2)
+
+def pow_np_norm(signal):
+    """Compute 2 Norm"""
+    return np.square(np.linalg.norm(signal, ord=2))
 
 def evaluate(args):
+    from pesq import pesq
+    from pystoi.stoi import stoi
     total_SISNRi = 0
     total_SDRi = 0
     total_cnt = 0
@@ -56,10 +73,10 @@ def evaluate(args):
     dataset = AudioDataset(args.data_dir, args.batch_size,
                            sample_rate=args.sample_rate, segment=-1, args=args,
                            mix_label=args.mix_label)
-    print(args.multichannel)
+
     data_loader = AudioDataLoader(multichannel=args.multichannel,dataset=dataset,
                                     batch_size=1, num_workers=2)
-
+    results = []
     with torch.no_grad():
         for i, (data) in enumerate(data_loader):
             # Get batch data
@@ -87,20 +104,50 @@ def evaluate(args):
             #print(mixture[0][0].shape,source[0].shape,estimate_source[0].shape)
             # for each utterance
             for mix, src_ref, src_est in zip(mixture, source, estimate_source):
-                print("Utt", total_cnt + 1)
-                # Compute SDRi
-                if args.cal_sdr:
-                    avg_SDRi = cal_SDRi(src_ref, src_est, mix)
-                    total_SDRi += avg_SDRi
-                    print("\tSDRi={0:.2f}".format(avg_SDRi))
-                # Compute SI-SNRi
-                avg_SISNRi = cal_SISNRi(src_ref, src_est, mix)
-                print("\tSI-SNRi={0:.2f}".format(avg_SISNRi))
-                total_SISNRi += avg_SISNRi
+
                 total_cnt += 1
-    if args.cal_sdr:
-        print("Average SDR improvement: {0:.2f}".format(total_SDRi / total_cnt))
-    print("Average SISNR improvement: {0:.2f}".format(total_SISNRi / total_cnt))
+
+                ref_sisdr = si_snr(mix, src_ref[0])
+                enh_sisdr = si_snr(src_est[0], src_ref[0])
+                ref_score = pesq(args.sample_rate,src_ref[0],mix, 'wb')#swap
+                enh_score = pesq(args.sample_rate, src_ref[0],src_est[0], 'wb')#swap
+                ref_stoi = stoi(src_ref[0], mix, args.sample_rate, extended=False)
+                enh_stoi = stoi(src_ref[0], src_est[0], args.sample_rate, extended=False)
+                ref_estoi = stoi(src_ref[0], mix, args.sample_rate, extended=True)
+                enh_estoi = stoi(src_ref[0], src_est[0], args.sample_rate, extended=True)
+
+                pesq_sum = 0
+                stoi_sum = 0
+                si_sdr = 0
+
+                results.append([i,
+                                {'pesq':[ref_score, enh_score],
+                                 'stoi':[ref_stoi,enh_stoi],
+                                 'si_sdr':[ref_sisdr, enh_sisdr],
+                                }])
+    filename = os.path.join(os.path.dirname(args.model_path),'results.csv')
+    print(filename)
+    with open(filename,'w') as wfid:
+        wfid.writelines('ID,Ref PESQ,Est PESQ,Ref STOI,Est STOI,Ref SI-SDR,Est SI-SDR\n')
+
+        for eval_score in results:
+            utt_id, score = eval_score
+            pesq = score['pesq']
+            stoi = score['stoi']
+            si_sdr = score['si_sdr']
+            wfid.writelines(
+                    'utt_{:s},{:.3f},{:.3f}, '.format(str(utt_id), pesq[0],pesq[1])
+                )
+            wfid.writelines(
+                    '{:.3f},{:.3f}, '.format(stoi[0],stoi[1])
+                )
+            wfid.writelines(
+                    '{:.3f},{:.3f}\n'.format(si_sdr[0],si_sdr[1])
+                )
+
+    #if args.cal_sdr:
+    #    print("Average SDR improvement: {0:.2f}".format(total_SDRi / total_cnt))
+    #print("Average SISNR improvement: {0:.2f}".format(total_SISNRi / total_cnt))
 
 
 def cal_SDRi(src_ref, src_est, mix):
@@ -170,6 +217,8 @@ def cal_SISNR(ref_sig, out_sig, eps=1e-8):
     ratio = np.sum(proj ** 2) / (np.sum(noise ** 2) + eps)
     sisnr = 10 * np.log(ratio + eps) / np.log(10.0)
     return sisnr
+
+
 
 
 if __name__ == '__main__':

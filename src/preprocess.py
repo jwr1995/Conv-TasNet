@@ -9,7 +9,8 @@ import glob
 import random
 import csv
 from itertools import  compress
-
+import numpy as np
+from numpy import random
 import soundfile as sf
 
 from signalprocessing import rms
@@ -65,16 +66,14 @@ def preprocess(args):
                     preprocess_one_dir(os.path.join(args.in_dir, args.array, source),
                                        os.path.join(args.out_dir, data_type),
                                        source,sample_rate=args.sample_rate,
-                                       entries=entries, nfiles=args.nfiles)
+                                       nfiles=args.nfiles)
             if data_type == 'dev':
-                entries = None
                 for source in [args.mix_label, 'noreverb_ref']:
                     preprocess_one_dir(os.path.join(args.dev_dir,
                                 "simu_single_MA/dev_simu_linear_nonuniform_track1",
                                 source),
                                 os.path.join(args.out_dir, data_type),
-                                source, sample_rate=args.sample_rate,
-                                entries=entries)
+                                source, sample_rate=args.sample_rate)
 
         for data_type in ['dev','eval']:
             for source in ['real-recording', 'semi-real-playback','semi-real-realspk']:

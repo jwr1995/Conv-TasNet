@@ -178,7 +178,7 @@ class Solver(object):
             #if self.corpus=='wsj0':
             #print(data[0],data[1],data[2],data[3]); exit()
             padded_mixture, mixture_lengths, padded_source = data
-            padded_mixture=padded_mixture*(torch.rand(1)*0.7+0.3)
+            
             if self.use_cuda:
                 padded_mixture = padded_mixture.cuda()
                 mixture_lengths = mixture_lengths.cuda()

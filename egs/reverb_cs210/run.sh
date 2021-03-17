@@ -33,8 +33,8 @@ then
   eval_data=/home/will/data/se/ConferencingSpeech2021/Train_dev_dataset/Evaluation_set/eval_data/task1
 else
   train_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs/train
-  dev_data=
-  eval_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/eval_data/task1/
+  dev_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/Train_dev_dataset/Development_test_set/
+  eval_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/Train_dev_dataset/Evaluation_set/eval_data/task1/
 fi
 
 stage=2  # Modify this to control to start from which stage
@@ -94,7 +94,7 @@ then
   num_workers=4
 else
   batch_size=16
-  num_workers=8
+  num_workers=16
 fi
 # optimizer
 optimizer=adam
@@ -198,7 +198,7 @@ if [ $stage -le 2 ]; then
     --multichannel $multichannel \
     --mix-label $mix_label \
     --rms-dir $valid_dir \
-    #>> $expdir/train.log
+    >> $expdir/train.log
 fi
 
 cp run.sh.log $expdir/run.sh.log
@@ -229,7 +229,7 @@ if [ $stage -le 3 ]; then
     --batch_size 1 \
     --multichannel $multichannel \
     --mix-label $mix_label
-    #> $expdir/eval.log
+    > $expdir/eval.log
 fi
 
 if [ $stage -le 4 ]; then
@@ -256,6 +256,6 @@ if [ $stage -le 4 ]; then
     --figure $figures \
     --originals True \
     --append_file False \
-    #> $expdir/separate.log
+    > $expdir/separate.log
   done
 fi

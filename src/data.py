@@ -21,6 +21,8 @@ Output:
 import json
 import math
 import os
+import glob
+import csv
 import soundfile as sf
 
 import numpy as np
@@ -144,6 +146,19 @@ class AudioDataset(data.Dataset):
 
 _MULTICHANNEL=False
 _SUBTRACT=False
+_USE_RMS=False
+_RMS_MEAN=0.002
+_RMS_VAR=0.001
+
+def process_rms_csv(filename):
+    with open(filename,'r') as f:
+        reader=csv.reader(f)
+        rms_table=[]
+        for i, row in enumerate(reader):
+            rms_table.append(float(row[1]))
+        mean=np.mean(np.array(rms_table))
+        variance=np.var(np.array(rms_table))
+    return mean, variance
 
 class AudioDataLoader(data.DataLoader):
     """
@@ -151,15 +166,15 @@ class AudioDataLoader(data.DataLoader):
     """
 
     def __init__(self, multichannel=False, subtract=False, mix_label=None,
-                *args, **kwargs):
+                rms_dir=None,*args, **kwargs):
         super(AudioDataLoader, self).__init__(*args, **kwargs)
-        global _MULTICHANNEL, _SUBTRACT
+        global _MULTICHANNEL, _SUBTRACT, _RMS_MEAN, _RMS_VAR, _USE_RMS
         _MULTICHANNEL=multichannel
         _SUBTRACT=subtract
-        # if multichannel:
-        #     self.collate_fn = _collate_fn_multi; return
-        # elif subtract:
-        #     self.collate_fn = _collate_fn_substract; return
+        if not rms_dir==None:
+            _USE_RMS=True
+            for filename in glob.glob(rms_dir+"/*.csv"):
+                _RMS_MEAN, _RMS_VAR=process_rms_csv(filename)
         self.collate_fn = _collate_fn
 
 def _collate_fn(batch):
@@ -277,28 +292,6 @@ def _collate_fn_eval(batch):
     ilens = torch.from_numpy(ilens)
     return mixtures_pad, ilens, filenames
 
-# def _collate_fn_eval_multi(batch):
-#     """
-#     Args:
-#         batch: list, len(batch) = 1. See AudioDataset.__getitem__()
-#     Returns:
-#         mixtures_pad: B x T, torch.Tensor
-#         ilens : B, torch.Tentor
-#         filenames: a list contain B strings
-#     """
-#     # batch should be located in list
-#     assert len(batch) == 1
-#     mixtures, filenames = load_mixtures(batch[0], multichannel=True)
-#
-#     # get batch of lengths of input sequences
-#     ilens = np.array([mix.shape[1] for mix in mixtures])
-#
-#     # perform padding and convert to tensor
-#     pad_value = 0
-#     xs = [torch.from_numpy(mix).float() for mix in mixtures]
-#     mixtures_pad = pad_list(xs, pad_value, multichannel=_MULTICHANNEL)
-#     ilens = torch.from_numpy(ilens)
-#     return mixtures_pad, ilens, filenames
 
 def rms_normalize(sig, rms_value=0.5):
     sig = sig*(rms_value/rms(sig))
@@ -348,22 +341,26 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False, eval=Fa
             # 1 x samples
             mix = sf.read(mix_path)[0].T[channel]
             if eval:
-                s1 = rms_normalize(sf.read(s1_path)[0].T[channel])
+                s1 = sf.read(s1_path)[0].T[channel]
             else:
-                s1 = rms_normalize(sf.read(s1_path)[0].T[channel])
+                s1 = rms_normalize(sf.read(s1_path)[0].T[channel],rms_value=0.2)
         else:
             # channels x samples
             mix = sf.read(mix_path)[0].T
             if eval:
-                s1 = rms_normalize(sf.read(s1_path)[0].T[0])
+                s1 = rms_normalize(sf.read(s1_path)[0].T[0],rms_value=0.2)
             else:
-                s1 = rms_normalize(sf.read(s1_path)[0].T[0])
+                s1 = rms_normalize(sf.read(s1_path)[0].T[0],rms_value=0.2)
 
         if C==2:
-            s2 = rms_normalize(sf.read(s2_path)[0].T)
+            s2 = rms_normalize(sf.read(s2_path)[0].T,rms_value=0.2)
         elif subtract:
             s2 = mix-s1
 
+        global _USE_RMS
+        if _USE_RMS:
+            global _RMS_MEAN, _RMS_VAR
+            mix = rms_normalize(mix,np.random.normal(_RMS_MEAN,_RMS_VAR))
 
         # merge s1 and s2
         if C==2 or subtract:

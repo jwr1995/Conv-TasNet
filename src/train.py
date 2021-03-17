@@ -105,6 +105,7 @@ parser.add_argument('--multichannel',default=False, type=bool)
 parser.add_argument('--mode', default="ss", type=str)
 parser.add_argument('--subtract', default=False, type=bool)
 parser.add_argument('--mix-label',default='mix',type=str)
+parser.add_argument('--rms-dir',default=None,type=str)
 
 def main(args):
     # Construct Solver
@@ -121,10 +122,10 @@ def main(args):
     tr_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
                                 dataset=tr_dataset, batch_size=1,
                                 shuffle=args.shuffle,
-                                num_workers=args.num_workers)
+                                num_workers=args.num_workers,rms_dir=args.rms_dir)
     cv_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
                                 dataset=cv_dataset, batch_size=1,
-                                num_workers=0)
+                                num_workers=0,rms_dir=args.rms_dir)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model
     if args.multichannel == False:
@@ -160,6 +161,6 @@ def main(args):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    #args.multichannel=True
+    print()
     print(args)
     main(args)

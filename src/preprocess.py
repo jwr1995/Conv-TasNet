@@ -14,8 +14,11 @@ import soundfile as sf
 
 from signalprocessing import rms
 
+subset_list = lambda input_list, nfiles : list(compress(input_list,
+            random.permutation(np.array([True]*nfiles+[False]*(len(input_list)-nfiles)))))
+
 def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000,
-                        entries=None, complete=False, export_rms=False):
+                        nfiles=None, complete=False, export_rms=False):
     file_infos = []
     in_dir = os.path.abspath(in_dir)
     try:
@@ -23,8 +26,8 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000,
         #print(in_dir)
     except:
         wav_list = glob.glob(in_dir+"/*")
-    if not entries == None:
-        wav_list = list(compress(wav_list,entries))
+    if not nfiles == None:
+        wav_list = subset_list(wav_list,nfiles)
     for wav_file in wav_list:
         if not wav_file.endswith('.wav'):
             continue
@@ -58,14 +61,11 @@ def preprocess(args):
     elif args.corpus == 'cs21':
         for data_type in ['train', 'dev']:
             if data_type == 'train':
-                num_files = len(os.listdir(os.path.abspath(os.path.join(args.in_dir,
-                args.array, args.mix_label))))
-                entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
                 for source in [args.mix_label, 'noreverb_ref']:
                     preprocess_one_dir(os.path.join(args.in_dir, args.array, source),
                                        os.path.join(args.out_dir, data_type),
-                                       source,
-                                       sample_rate=args.sample_rate, entries=entries)
+                                       source,sample_rate=args.sample_rate,
+                                       entries=entries, nfiles=args.nfiles)
             if data_type == 'dev':
                 entries = None
                 for source in [args.mix_label, 'noreverb_ref']:
@@ -104,6 +104,7 @@ if __name__ == "__main__":
     parser.add_argument('--array', type=str, default='simu_non_uniform')
     parser.add_argument('--percentage', type=float, default=20.0)
     parser.add_argument('--mix-label', type=str, default="mix")
+    parser.add_argument('--nfiles',type=int, default=6)
     args = parser.parse_args()
     print(args)
     preprocess(args)

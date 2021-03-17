@@ -32,11 +32,12 @@ then
   dev_data=/home/will/data/se/ConferencingSpeech2021/Train_dev_dataset/Development_test_set/
   eval_data=/home/will/data/se/ConferencingSpeech2021/Train_dev_dataset/Evaluation_set/eval_data/task1
 else
-  data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
+  train_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs/train
+  dev_data=
   eval_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/eval_data/task1/
 fi
 
-stage=4  # Modify this to control to start from which stage
+stage=2  # Modify this to control to start from which stage
 
 dumpdir=data  # directory to put generated json file
 
@@ -45,7 +46,13 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-percentage=100
+if [[ $(hostname) = Aithon ]]
+then
+  nfiles=6
+else
+  nfiles=10000
+fi
+
 sample_rate=16000
 segment=2  # seconds
 cv_maxlen=3   # seconds
@@ -134,7 +141,7 @@ if [ $stage -le 1 ]; then
   --out-dir $dumpdir \
   --sample-rate $sample_rate \
   --corpus $corpus \
-  --percentage $percentage \
+  --nfiles $nfiles \
   --mix-label $mix_label
 fi
 
@@ -146,7 +153,7 @@ fi
 
 mkdir -p $expdir
 cp run.sh $expdir/run.sh
-
+echo $dev_dir
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
   #${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
@@ -190,6 +197,7 @@ if [ $stage -le 2 ]; then
     --array $array \
     --multichannel $multichannel \
     --mix-label $mix_label \
+    --rms-dir $valid_dir \
     #>> $expdir/train.log
 fi
 

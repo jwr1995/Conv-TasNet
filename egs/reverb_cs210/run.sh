@@ -98,7 +98,7 @@ else
 fi
 # optimizer
 optimizer=adam
-lr=3e-4
+lr=1e-2
 momentum=0
 l2=0.01
 # save and visualize

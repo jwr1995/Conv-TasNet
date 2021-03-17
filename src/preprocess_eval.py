@@ -37,12 +37,11 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=
 
 
 def preprocess(args):
-    for data_type in ['eval']:
-        for source in ['real-recording', 'semi-real-playback','semi-real-realspk']:
-            preprocess_one_dir(os.path.join(args.in_dir, source,'1'),
-                               os.path.join(args.out_dir, data_type),
-                               source,
-                               sample_rate=args.sample_rate)
+    for source in args.sources.split(" "):
+        preprocess_one_dir(os.path.join(args.in_dir, source,'1'),
+                           os.path.join(args.out_dir, args.data_type),
+                           source,
+                           sample_rate=args.sample_rate)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Corpus data preprocessing")
@@ -50,6 +49,7 @@ if __name__ == "__main__":
                         help='Directory path of corpus including train, dev and eval')
     parser.add_argument('--out-dir', type=str, default=None,
                         help='Directory path to put output files')
+    parser.add_argument('--data_type', type=str, default="eval")
     parser.add_argument('--sample-rate', type=int, default=8000,
                         help='Sample rate of audio file')
     parser.add_argument('--denoising', type=bool, default=True,

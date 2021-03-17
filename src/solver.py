@@ -183,7 +183,6 @@ class Solver(object):
                 padded_mixture = padded_mixture.cuda()
                 mixture_lengths = mixture_lengths.cuda()
                 padded_source = padded_source.cuda()
-            print(padded_source.shape)
             estimate_source = self.model(padded_mixture)
 
             if self.C == 1:

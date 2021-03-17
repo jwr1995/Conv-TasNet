@@ -11,7 +11,7 @@ from mir_eval.separation import bss_eval_sources
 import numpy as np
 import torch
 
-from data import AudioDataLoader, AudioDataset, normalize
+from data import AudioDataLoader, AudioDataset
 from pit_criterion import cal_loss
 from conv_tasnet import ConvTasNet
 from multi_conv_tasnet import  MultiConvTasNet
@@ -125,7 +125,7 @@ def evaluate(args):
                                  'stoi':[ref_stoi,enh_stoi],
                                  'si_sdr':[ref_sisdr, enh_sisdr],
                                 }])
-    filename = os.path.join(os.path.dirname(args.model_path),'results_normalized.csv')
+    filename = os.path.join(os.path.dirname(args.model_path),'results.csv')
     print(filename)
     with open(filename,'w') as wfid:
         wfid.writelines('ID,Ref PESQ,Est PESQ,Ref STOI,Est STOI,Ref SI-SDR,Est SI-SDR\n')

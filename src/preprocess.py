@@ -5,16 +5,24 @@
 import argparse
 import json
 import os
+import glob
 import random
+import csv
 from itertools import  compress
 
 import soundfile as sf
 
+from signalprocessing import rms
 
-def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=None, complete=False):
+def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000,
+                        entries=None, complete=False, export_rms=False):
     file_infos = []
     in_dir = os.path.abspath(in_dir)
-    wav_list = os.listdir(in_dir)
+    try:
+        wav_list = os.listdir(in_dir)
+        #print(in_dir)
+    except:
+        wav_list = glob.glob(in_dir+"/*")
     if not entries == None:
         wav_list = list(compress(wav_list,entries))
     for wav_file in wav_list:
@@ -28,13 +36,17 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000, entries=
                 file_infos.append((wav_path, samples.shape[0],
                 samples.shape[1], channel))
         else:
-            file_infos.append((wav_path, samples.shape[0],
-            samples.shape[1], 0))
+            file_infos.append((wav_path, samples.shape[0], samples.shape[1], 0))
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     with open(os.path.join(out_dir, out_filename + '.json'), 'w') as f:
         json.dump(file_infos, f, indent=4)
 
+    if export_rms:
+        with open(os.path.join(out_dir,out_filename.split(".")[0]+'_rms.csv'),'w') as f:
+            writer = csv.writer(f)
+            for row in file_infos:
+                writer.writerow([row[0],rms(sf.read(row[0])[0][0])])
 
 def preprocess(args):
     if args.corpus == 'wsj0':
@@ -42,26 +54,45 @@ def preprocess(args):
             for speaker in ['mix', 's1', 's2']:
                 preprocess_one_dir(os.path.join(args.in_dir, data_type, speaker),
                                    os.path.join(args.out_dir, data_type),
-                                   speaker,
-                                   sample_rate=args.sample_rate)
+                                   speaker, sample_rate=args.sample_rate)
     elif args.corpus == 'cs21':
         for data_type in ['train', 'dev']:
-            num_files = len(os.listdir(os.path.abspath(os.path.join(args.in_dir,
-                        data_type, args.array, args.mix_label))))
             if data_type == 'train':
-            	entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
+                num_files = len(os.listdir(os.path.abspath(os.path.join(args.in_dir,
+                args.array, args.mix_label))))
+                entries = [bool(random.randrange(100) < args.percentage) for i in range(num_files)]
+                for source in [args.mix_label, 'noreverb_ref']:
+                    preprocess_one_dir(os.path.join(args.in_dir, args.array, source),
+                                       os.path.join(args.out_dir, data_type),
+                                       source,
+                                       sample_rate=args.sample_rate, entries=entries)
             if data_type == 'dev':
-            	entries = [bool(random.randrange(100) < args.percentage*20) for i in range(num_files)]
-            for source in [args.mix_label, 'noreverb_ref']:
-                preprocess_one_dir(os.path.join(args.in_dir, data_type, args.array, source),
-                                   os.path.join(args.out_dir, data_type),
-                                   source,
-                                   sample_rate=args.sample_rate, entries=entries)
+                entries = None
+                for source in [args.mix_label, 'noreverb_ref']:
+                    preprocess_one_dir(os.path.join(args.dev_dir,
+                                "simu_single_MA/dev_simu_linear_nonuniform_track1",
+                                source),
+                                os.path.join(args.out_dir, data_type),
+                                source, sample_rate=args.sample_rate,
+                                entries=entries)
+
+        for data_type in ['dev','eval']:
+            for source in ['real-recording', 'semi-real-playback','semi-real-realspk']:
+                if data_type == 'dev':
+                    in_dir = os.path.join(args.dev_dir,source,'*/1')
+                    export_rms=True
+                else:
+                    in_dir = os.path.join(args.eval_dir,source,'1')
+                    export_rms=False
+                preprocess_one_dir(in_dir,os.path.join(args.out_dir, data_type),
+                                   source, sample_rate=args.sample_rate,export_rms=export_rms)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Corpus data preprocessing")
     parser.add_argument('--in-dir', type=str, default=None,
                         help='Directory path of corpus including train, dev and eval')
+    parser.add_argument('--dev-dir',type=str,default=None)#dev test
+    parser.add_argument('--eval-dir',type=str,default=None)
     parser.add_argument('--out-dir', type=str, default=None,
                         help='Directory path to put output files')
     parser.add_argument('--sample-rate', type=int, default=8000,

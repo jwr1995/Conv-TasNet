@@ -14,8 +14,6 @@ from data import EvalDataLoader, EvalDataset
 from conv_tasnet import ConvTasNet
 from multi_conv_tasnet import MultiConvTasNet
 from utils import remove_pad
-from data import normalize
-
 
 parser = argparse.ArgumentParser('Separate speech using Conv-TasNet')
 parser.add_argument('--model_path', type=str, required=True,

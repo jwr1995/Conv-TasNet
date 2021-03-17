@@ -117,7 +117,7 @@ def main(args):
                               sample_rate=args.sample_rate,
                               segment=-1, cv_maxlen=args.cv_maxlen,
                               mode=args.mode, mix_label=args.mix_label)  # -1 -> use full audio
-    print(args.multichannel)
+
     tr_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
                                 dataset=tr_dataset, batch_size=1,
                                 shuffle=args.shuffle,

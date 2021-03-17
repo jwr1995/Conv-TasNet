@@ -28,14 +28,15 @@ export NCCL_IB_DISABLE=1
 
 if [[ $(hostname) = Aithon ]]
 then
-  data=/home/will/data/dummy/cs21
+  train_data=/home/will/data/dummy/cs21/train
+  dev_data=/home/will/data/se/ConferencingSpeech2021/Train_dev_dataset/Development_test_set/
   eval_data=/home/will/data/se/ConferencingSpeech2021/Train_dev_dataset/Evaluation_set/eval_data/task1
 else
   data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs
   eval_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/eval_data/task1/
 fi
 
-stage=5  # Modify this to control to start from which stage
+stage=4  # Modify this to control to start from which stage
 
 dumpdir=data  # directory to put generated json file
 
@@ -49,7 +50,7 @@ sample_rate=16000
 segment=2  # seconds
 cv_maxlen=3   # seconds
 # Network config
-if [[ $(hostname) = Aithon]]
+if [[ $(hostname) = Aithon ]]
 then
   N=256
   L=60
@@ -80,7 +81,7 @@ early_stop=0
 max_norm=3
 # minibatch
 shuffle=1
-if [[ $(hostname) = Aithon]]
+if [[ $(hostname) = Aithon ]]
 then
   batch_size=4
   num_workers=4
@@ -124,17 +125,18 @@ ngpu=1  # always 1
 
 
 if [ $stage -le 1 ]; then
-  echo "Stage 1: Generating json files including wav path and duration"
+  echo "Stage 1: Generating train & dev json files including wav path and duration"
   [ ! -d $dumpdir ] && mkdir $dumpdir
   preprocess.py \
-  --in-dir $data \
+  --in-dir $train_data \
+  --dev-dir $dev_data \
+  --eval-dir $eval_data \
   --out-dir $dumpdir \
   --sample-rate $sample_rate \
   --corpus $corpus \
   --percentage $percentage \
   --mix-label $mix_label
 fi
-
 
 if [ -z ${tag} ]; then
   expdir=exp/train_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_`basename $train_dir`
@@ -190,6 +192,7 @@ if [ $stage -le 2 ]; then
     --mix-label $mix_label \
     #>> $expdir/train.log
 fi
+
 cp run.sh.log $expdir/run.sh.log
 
 # if [ $stage -le 3 ]; then
@@ -222,27 +225,15 @@ if [ $stage -le 3 ]; then
 fi
 
 if [ $stage -le 4 ]; then
-  echo "Stage 4: Generating json files including wav path and duration"
-  [ ! -d $dumpdir ] && mkdir $dumpdir
-  preprocess_eval.py \
-  --in-dir $eval_data \
-  --out-dir $dumpdir \
-  --sample-rate $sample_rate \
-  --corpus $corpus \
-  --percentage $percentage
-fi
-
-
-if [ $stage -le 5 ]; then
-  echo "Stage 5: Separate speech using Conv-TasNet"
+  echo "Stage 4: Separate speech using Conv-TasNet"
   mkdir -p $expdir/{separate,originals}
   mkdir -p $expdir/{separate,originals}/task1
   mkdir -p $expdir/{separate,originals}/task1/1/
   for fname in $(dir $separate_dir)
   do
     echo "Separating $fname"
-    separate_out_dir=${expdir}/separate/task1/1/$fname
-    original_out_dir=${expdir}/originals/task1/1/$fname
+    separate_out_dir=${expdir}/separate/task1/1/$(basename -s .json fname)
+    original_out_dir=${expdir}/originals/task1/1/$(basename -s .json fname)
   #${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
     separate.py \
     --model_path ${expdir}/final.pth.tar \

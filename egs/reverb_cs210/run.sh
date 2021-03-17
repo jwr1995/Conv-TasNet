@@ -37,7 +37,12 @@ else
   eval_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/Train_dev_dataset/Evaluation_set/eval_data/task1/
 fi
 
-stage=2  # Modify this to control to start from which stage
+if [[ $(hostname) = Aithon ]]
+then
+  stage=1  # Modify this to control to start from which stage
+else
+  stage=2
+fi
 
 dumpdir=data  # directory to put generated json file
 
@@ -48,7 +53,7 @@ evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
 if [[ $(hostname) = Aithon ]]
 then
-  nfiles=6
+  nfiles=22
 else
   nfiles=10000
 fi

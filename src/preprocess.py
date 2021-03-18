@@ -24,13 +24,12 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000,
     in_dir = os.path.abspath(in_dir)
     try:
         wav_list = os.listdir(in_dir)
-        print(in_dir)
+
     except:
         wav_list = glob.glob(in_dir+"/*")
 
     if not entries == None:
         wav_list = list(compress(wav_list,entries))
-    print(wav_list)
     for wav_file in wav_list:
         if not wav_file.endswith('.wav'):
             continue
@@ -43,14 +42,11 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000,
                 samples.shape[1], channel))
         else:
             file_infos.append((wav_path, samples.shape[0], samples.shape[1], 0))
-        print(file_infos)
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     with open(os.path.join(out_dir, out_filename + '.json'), 'w') as f:
-        print(file_infos)
         json.dump(file_infos, f, indent=4)
-        print(out_dir,out_filename,file_infos,"DONE");exit()
 
     if export_rms:
         with open(os.path.join(out_dir,out_filename.split(".")[0]+'_rms.csv'),'w') as f:

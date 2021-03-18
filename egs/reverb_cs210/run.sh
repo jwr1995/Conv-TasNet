@@ -53,7 +53,7 @@ evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
 if [[ $(hostname) = Aithon ]]
 then
-  nfiles=22
+  nfiles=6
 else
   nfiles=10000
 fi
@@ -149,7 +149,7 @@ if [ $stage -le 1 ]; then
   --nfiles $nfiles \
   --mix-label $mix_label
 fi
-
+exit
 if [ -z ${tag} ]; then
   expdir=exp/train_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_`basename $train_dir`
 else

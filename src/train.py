@@ -12,7 +12,7 @@ mp.set_sharing_strategy("file_system")
 from data import AudioDataLoader, AudioDataset
 from solver import Solver
 from conv_tasnet import ConvTasNet
-from multi_conv_tasnet import MultiConvTasNet
+#from multi_conv_tasnet import MultiConvTasNet
 
 torch.backends.cudnn.benchmark = False
 parser = argparse.ArgumentParser(
@@ -129,14 +129,14 @@ def main(args):
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model
     if args.multichannel == False:
-        model = ConvTasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
+        model = TasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
                        args.C, norm_type=args.norm_type, causal=args.causal,
                        mask_nonlinear=args.mask_nonlinear)
-    else:
-        model = MultiConvTasNet(args.N,args.L, args.B, args.H, args.P, args.X, args.R,
-                       args.C, norm_type=args.norm_type, causal=args.causal,
-                       mask_nonlinear=args.mask_nonlinear)
-    print(model)
+    # else:
+    #     model = MultiConvTasNet(args.N,args.L, args.B, args.H, args.P, args.X, args.R,
+    #                    args.C, norm_type=args.norm_type, causal=args.causal,
+    #                    mask_nonlinear=args.mask_nonlinear)
+    #print(model)
     if args.use_cuda:
         model = torch.nn.DataParallel(model)
         model.cuda()

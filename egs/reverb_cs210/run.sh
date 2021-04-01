@@ -39,7 +39,7 @@ fi
 
 if [[ $(hostname) = Aithon ]]
 then
-  stage=1  # Modify this to control to start from which stage
+  stage=3  # Modify this to control to start from which stage
 else
   stage=2
 fi
@@ -149,7 +149,7 @@ if [ $stage -le 1 ]; then
   --nfiles $nfiles \
   --mix-label $mix_label
 fi
-exit
+
 if [ -z ${tag} ]; then
   expdir=exp/train_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_`basename $train_dir`
 else

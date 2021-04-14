@@ -20,6 +20,9 @@ parser = argparse.ArgumentParser(
     "with Permutation Invariant Training")
 # General config
 # Task related
+
+bool_string = lambda the_string : True if the_string == 'True' else False
+
 parser.add_argument('--train_dir', type=str, default=None,
                     help='directory including mix.json, s1.json and s2.json')
 parser.add_argument('--valid_dir', type=str, default=None,
@@ -101,9 +104,9 @@ parser.add_argument('--visdom_id', default='TasNet training',
                     help='Identifier for visdom run')
 parser.add_argument('--corpus',default='wsj0')
 parser.add_argument('--array',default='simu_non_linear')
-parser.add_argument('--multichannel',default=False, type=bool)
+parser.add_argument('--multichannel',default=False, type=bool_string)
 parser.add_argument('--mode', default="ss", type=str)
-parser.add_argument('--subtract', default=False, type=bool)
+parser.add_argument('--subtract', default=False, type=bool_string)
 parser.add_argument('--mix-label',default='mix',type=str)
 parser.add_argument('--rms-dir',default=None,type=str)
 
@@ -118,7 +121,6 @@ def main(args):
                               sample_rate=args.sample_rate,
                               segment=-1, cv_maxlen=args.cv_maxlen,
                               mode=args.mode, mix_label=args.mix_label)  # -1 -> use full audio
-
     tr_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
                                 dataset=tr_dataset, batch_size=1,
                                 shuffle=args.shuffle,
@@ -128,10 +130,9 @@ def main(args):
                                 num_workers=0,rms_dir=args.rms_dir)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model
-    if args.multichannel == False:
-        model = TasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
-                       args.C, norm_type=args.norm_type, causal=args.causal,
-                       mask_nonlinear=args.mask_nonlinear)
+    #if args.multichannel == False:
+    model = ConvTasNet(N=args.N, L=args.L, B=args.B, H=args.H, P=args.P, X=args.X, R=args.R,
+                       C=args.C, causal=args.causal)
     # else:
     #     model = MultiConvTasNet(args.N,args.L, args.B, args.H, args.P, args.X, args.R,
     #                    args.C, norm_type=args.norm_type, causal=args.causal,

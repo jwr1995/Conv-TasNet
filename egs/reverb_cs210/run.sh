@@ -4,44 +4,47 @@
 # Author: Kaituo XU
 # Adapted 2021/02
 # Author: William Ravenscroft
-source /share/mini1/usr/will/miniconda3/bin/activate
-conda init
+# Ensure Anaconda is initialized before proceeding :-
+# source /share/mini1/usr/will/miniconda3/bin/activate
+# conda init
 
 if [[ $(hostname) = node27 ]]
 then
   conda activate torch11
   echo "Using environment: torch11"
-elif [[ $(hostname) = Aithon ]]
+elif [[ $(hostname) = pegasus ]]
 then
-  conda activate base
+  #conda activate base
   echo "Using environment: base"
+  CUDA_VISIBLE_DEVICES=0
 else
   conda activate cs21
   echo "Using environment: cs21"
 fi
 
+echo "Available GPU: $CUDA_VISIBLE_DEVICES"
+
 #export LDLIBRARYPATH=/share/mini1/sw/std/cuda/
 #_LIBRARY_PATH=${LD_LIBRARY_PATH}:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/include/:/share/mini1/sw/std/cuda/cuda10.1/cuda/:/share/mini1/sw/std/cuda/cuda10.1/x86_64/lib64/stubs
 
-export NCCL_SOCKET_IFNAME=virbr0
-export NCCL_IB_DISABLE=1
-
-if [[ $(hostname) = Aithon ]]
+if [[ $(hostname) = pegasus ]]
 then
   train_data=/home/will/data/dummy/cs21/train
   dev_data=/home/will/data/se/ConferencingSpeech2021/Train_dev_dataset/Development_test_set/
   eval_data=/home/will/data/se/ConferencingSpeech2021/Train_dev_dataset/Evaluation_set/eval_data/task1
 else
+  export NCCL_SOCKET_IFNAME=virbr0
+  export NCCL_IB_DISABLE=1
   train_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs/train
   dev_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/Train_dev_dataset/Development_test_set/
   eval_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/Train_dev_dataset/Evaluation_set/eval_data/task1/
 fi
 
-if [[ $(hostname) = Aithon ]]
+if [[ $(hostname) = pegasus ]]
 then
-  stage=3  # Modify this to control to start from which stage
+  stage=4  # Modify this to control to start from which stage
 else
-  stage=2
+  stage=1
 fi
 
 dumpdir=data  # directory to put generated json file
@@ -51,35 +54,26 @@ train_dir=$dumpdir/train
 valid_dir=$dumpdir/dev
 evaluate_dir=$dumpdir/eval
 separate_dir=$dumpdir/eval
-if [[ $(hostname) = Aithon ]]
+if [[ $(hostname) = pegasus ]]
 then
-  nfiles=6
+  nfiles=10000
 else
   nfiles=10000
 fi
 
 sample_rate=16000
-segment=2  # seconds
-cv_maxlen=3   # seconds
+segment=6  # seconds
+cv_maxlen=4   # seconds
 # Network config
-if [[ $(hostname) = Aithon ]]
-then
-  N=256
-  L=60
-  B=128
-  H=256
-  P=3
-  X=8
-  R=4
-else
-  N=256
-  L=60
-  B=256
-  H=512
-  P=3
-  X=8
-  R=4
-fi
+
+N=4096
+L=640
+B=256
+H=512
+P=3
+X=8 # switched
+R=4 # switched
+
 norm_type=gLN
 causal=1
 mask_nonlinear='sigmoid'
@@ -93,17 +87,13 @@ early_stop=0
 max_norm=3
 # minibatch
 shuffle=1
-if [[ $(hostname) = Aithon ]]
-then
-  batch_size=4
-  num_workers=4
-else
-  batch_size=16
-  num_workers=16
-fi
+
+batch_size=16
+num_workers=16
+
 # optimizer
 optimizer=adam
-lr=1e-2
+lr=1e-3
 momentum=0
 l2=0.01
 # save and visualize
@@ -121,13 +111,13 @@ figures=True
 #corpus params
 corpus=cs21
 array=simu_non_uniform
-multichannel=True
+multichannel=0
 mix_label="reverb_ref"
 
 # -- END Conv-TasNet Config
 
 # exp tag
-tag="BIG" # tag for managing experiments.
+tag= # tag for managing experiments.
 
 ngpu=1  # always 1
 
@@ -147,7 +137,8 @@ if [ $stage -le 1 ]; then
   --sample-rate $sample_rate \
   --corpus $corpus \
   --nfiles $nfiles \
-  --mix-label $mix_label
+  --mix-label $mix_label \
+  --complete True
 fi
 
 if [ -z ${tag} ]; then
@@ -203,7 +194,7 @@ if [ $stage -le 2 ]; then
     --multichannel $multichannel \
     --mix-label $mix_label \
     --rms-dir $valid_dir \
-    >> $expdir/train.log
+    #>> $expdir/train.log
 fi
 
 cp run.sh.log $expdir/run.sh.log
@@ -234,7 +225,7 @@ if [ $stage -le 3 ]; then
     --batch_size 1 \
     --multichannel $multichannel \
     --mix-label $mix_label
-    > $expdir/eval.log
+    #> $expdir/eval.log
 fi
 
 if [ $stage -le 4 ]; then
@@ -245,8 +236,8 @@ if [ $stage -le 4 ]; then
   for fname in $(dir $separate_dir)
   do
     echo "Separating $fname"
-    separate_out_dir=${expdir}/separate/task1/1/$(basename -s .json fname)
-    original_out_dir=${expdir}/originals/task1/1/$(basename -s .json fname)
+    separate_out_dir=${expdir}/separate/task1/1/$(basename -s .json $fname)
+    original_out_dir=${expdir}/originals/task1/1/$(basename -s .json $fname)
   #${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
     separate.py \
     --model_path ${expdir}/final.pth.tar \
@@ -261,6 +252,6 @@ if [ $stage -le 4 ]; then
     --figure $figures \
     --originals True \
     --append_file False \
-    > $expdir/separate.log
+    #> $expdir/separate.log
   done
 fi

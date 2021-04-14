@@ -33,6 +33,7 @@ import librosa
 
 from signalprocessing import rms
 
+
 class AudioDataset(data.Dataset):
 
     def __init__(self, json_dir, batch_size, args=None, sample_rate=8000,
@@ -47,6 +48,7 @@ class AudioDataset(data.Dataset):
         super(AudioDataset, self).__init__()
         self.multi=multi
         self.mix_label=mix_label
+
         if  args.corpus == "cs21":
             mix_json = os.path.join(json_dir, self.mix_label+'.json')
             s1_json = os.path.join(json_dir, 'noreverb_ref.json')
@@ -73,7 +75,13 @@ class AudioDataset(data.Dataset):
             # segment length and count dropped utts
             segment_len = int(segment * sample_rate)  # 4s * 8000/s = 32000 samples
             drop_utt, drop_len = 0, 0
-            for _, sample, cs, c in sorted_mix_infos:
+            for cells in sorted_mix_infos:
+                if len(cells) == 4:
+                    _, sample, cs, c = cells
+                elif len(cells) == 5:
+                    _, sample, cs, c, _y = cells
+                elif len(cells) == 6:
+                    _, sample, cs, c, _y, _z = cells
                 if sample < segment_len:
                     drop_utt += 1
                     drop_len += sample
@@ -198,13 +206,12 @@ def _collate_fn(batch):
     # perform padding and convert to tensor
     pad_value = 0
 
-    #print(np.array(mixtures).shape,np.array(sources).shape)
     mixtures_pad = pad_list([torch.from_numpy(mix).float()
                              for mix in mixtures], pad_value)
     ilens = torch.from_numpy(ilens)
     sources_pad = pad_list([torch.from_numpy(s).float()
                             for s in sources], pad_value)
-    #print(mixtures_pad.size(),ilens.size(),sources_pad.size())
+
     # N x T x C -> N x C x T
     if _SUBTRACT:
         sources_pad = sources_pad.permute((0, 2, 1)).contiguous()
@@ -280,17 +287,25 @@ def _collate_fn_eval(batch):
     global _MULTICHANNEL
     # batch should be located in list
     assert len(batch) == 1
-    mixtures, filenames = load_mixtures(batch[0])
-
+    if _MULTICHANNEL:
+        mixtures, filenames, channels = load_mixtures(batch[0])
+    else:
+        mixtures, filenames, channels = load_mixtures(batch[0])
     # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[int(_MULTICHANNEL)] for mix in mixtures])
+    if bool(_MULTICHANNEL):
+        ilens = np.array([mix.shape[int(_MULTICHANNEL)] for mix in mixtures])
+    else:
+        ilens = np.array([mix.shape[0] for mix in mixtures])
 
     # perform padding and convert to tensor
     pad_value = 0
     mixtures_pad = pad_list([torch.from_numpy(mix).float()
                              for mix in mixtures], pad_value, multichannel=_MULTICHANNEL)
     ilens = torch.from_numpy(ilens)
-    return mixtures_pad, ilens, filenames
+    if channels:
+        return mixtures_pad, ilens, filenames, channels
+    else:
+        return mixtures_pad, ilens, filenames, channels
 
 
 def rms_normalize(sig, rms_value=0.5):
@@ -310,11 +325,13 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False, eval=Fa
         sources: a list containing B items, each item is T x C np.ndarray
         T varies from item to item.
     """
+
     mixtures, sources = [], []
     if len(batch) == 5:
         C=2
         mix_infos, s1_infos, s2_infos, sample_rate, segment_len = batch
         zipped = zip(mix_infos, s1_infos, s2_infos)
+    # elif len(batch) == 5 and _NUM_SPEAKERS == 1:
     else:
         C=1
         mix_infos, s1_infos, sample_rate, segment_len = batch
@@ -326,7 +343,9 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False, eval=Fa
             mix_info, s1_info, s2_info = packet
         else:
             mix_info, s1_info = packet
-            channel=mix_info[-1]
+            channel=mix_info[-3]
+            start_sample=s1_info[-2]
+            end_sample=mix_info[-1]
 
         mix_path = mix_info[0]
         s1_path = s1_info[0]
@@ -339,28 +358,35 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False, eval=Fa
         #s1, _ = librosa.load(s1_path, sr=sample_rate)
         if multichannel == False:
             # 1 x samples
-            mix = sf.read(mix_path)[0].T[channel]
+            mix = sf.read(mix_path)[0][start_sample:end_sample,channel]
             if eval:
-                s1 = sf.read(s1_path)[0].T[channel]
+                s1 = sf.read(s1_path)[0][:,channel]
             else:
-                s1 = rms_normalize(sf.read(s1_path)[0].T[channel],rms_value=0.2)
+                #s1 = rms_normalize(sf.read(s1_path)[0][start_sample:,channel],rms_value=0.2)
+                s1 = sf.read(s1_path)[0][start_sample:end_sample,channel]
         else:
             # channels x samples
             mix = sf.read(mix_path)[0].T
             if eval:
-                s1 = rms_normalize(sf.read(s1_path)[0].T[0],rms_value=0.2)
+                #s1 = rms_normalize(sf.read(s1_path)[0][:,0],rms_value=0.2)
+                s1 = sf.read(s1_path)[0][:,0]
             else:
-                s1 = rms_normalize(sf.read(s1_path)[0].T[0],rms_value=0.2)
+                #s1 = rms_normalize(sf.read(s1_path)[0][:,0],rms_value=0.2)
+                s1 = sf.read(s1_path)[0][:,0]
+            # import matplotlib.pyplot as plt
+            # plt.plot(s1)
+            # plt.show()
 
         if C==2:
-            s2 = rms_normalize(sf.read(s2_path)[0].T,rms_value=0.2)
+            #s2 = rms_normalize(sf.read(s2_path)[:,0],rms_value=0.2)
+            s2 = sf.read(s2_path)[:,0],rms_value=0.2
         elif subtract:
             s2 = mix-s1
 
-        global _USE_RMS
-        if _USE_RMS:
-            global _RMS_MEAN, _RMS_VAR
-            mix = rms_normalize(mix,np.random.normal(_RMS_MEAN,_RMS_VAR))
+        # global _USE_RMS
+        # if _USE_RMS:
+        #     global _RMS_MEAN, _RMS_VAR
+        #     mix = rms_normalize(mix,np.random.normal(_RMS_MEAN,_RMS_VAR))
 
         # merge s1 and s2
         if C==2 or subtract:
@@ -379,7 +405,7 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False, eval=Fa
                 sources.append(s[i:i+segment_len])
             if utt_len % segment_len != 0:
                 if not multichannel:
-                    mixtures.append(mix[:,-segment_len:])
+                    mixtures.append(mix[-segment_len:])
                 else:
                     mixtures.append(mix[:,-segment_len:])
                 sources.append(s[-segment_len:])
@@ -396,29 +422,34 @@ def load_mixtures(batch):
         T varies from item to item.
     """
     global _MULTICHANNEL
-    mixtures, filenames = [], []
+    mixtures, filenames, channels = [], [], []
     mix_infos, sample_rate = batch
-    if (len(mix_infos[0]))==4: C=1
+    if (len(mix_infos[0]))==6: C=1
     else: C=None
+
     # for each utterance
     for mix_info in mix_infos:
         mix_path = mix_info[0]
         # read wav file
+
         if C == 1:
-            if not _MULTICHANNEL:
-                channel = mix_info[-1]
+            if not bool(_MULTICHANNEL):
+                channel = mix_info[-3]
                 mix = sf.read(mix_path)[0].T[channel]
             else:
                 channel = 0
                 mix = sf.read(mix_path)[0].T
+            channels.append(channel)
         else:
             mix, _ = librosa.load(mix_path, sr=sample_rate)
+
         mixtures.append(mix)
         filenames.append(mix_path)
-    return mixtures, filenames
+
+    return mixtures, filenames, channels
 
 def pad_list(xs, pad_value,multichannel=False):
-    #print(xs); exit()
+
     n_batch = len(xs)
 
     if multichannel:
@@ -428,8 +459,6 @@ def pad_list(xs, pad_value,multichannel=False):
 
     max_len = max(x.size(pos) for x in xs)
 
-
-    #print(max_len);exit()
     if multichannel:
         pad = xs[0].new(n_batch, xs[0].size()[0], max_len).fill_(pad_value)
         for i in range(n_batch):

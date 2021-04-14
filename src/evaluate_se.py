@@ -14,9 +14,9 @@ import torch
 from data import AudioDataLoader, AudioDataset
 from pit_criterion import cal_loss
 from conv_tasnet import ConvTasNet
-from multi_conv_tasnet import  MultiConvTasNet
+#from multi_conv_tasnet import  MultiConvTasNet
 from utils import remove_pad
-
+from train import bool_string
 
 
 parser = argparse.ArgumentParser('Evaluate separation performance using Conv-TasNet')
@@ -34,7 +34,7 @@ parser.add_argument('--batch_size', default=1, type=int,
                     help='Batch size')
 parser.add_argument('--corpus', default="cs21", type=str)
 parser.add_argument('--C', default=1, type=int)
-parser.add_argument('--multichannel',default=False, type=bool)
+parser.add_argument('--multichannel',default=False, type=bool_string)
 parser.add_argument('--mix-label',default='mix',type=str)
 
 def si_snr(estimated, original, eps=1e-8):
@@ -61,8 +61,8 @@ def evaluate(args):
     # Load model
     if not args.multichannel:
         model = ConvTasNet.load_model(args.model_path)
-    else:
-        model = MultiConvTasNet.load_model(args.model_path)
+    # else:
+    #     model = MultiConvTasNet.load_model(args.model_path)
     print(model)
     model.eval()
     #if args.use_cuda:
@@ -88,6 +88,7 @@ def evaluate(args):
                 mixture_lengths = mixture_lengths.cuda()
                 padded_source = padded_source.cuda()
             # Forward
+            #print(padded_mixture.shape);exit()
             estimate_source = model(padded_mixture)  # [B, C, T]
             #print(estimate_source.shape)
             loss, max_snr, estimate_source, reorder_estimate_source = \

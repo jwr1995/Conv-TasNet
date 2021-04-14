@@ -12,8 +12,10 @@ import torch
 
 from data import EvalDataLoader, EvalDataset
 from conv_tasnet import ConvTasNet
-from multi_conv_tasnet import MultiConvTasNet
+#from multi_conv_tasnet import MultiConvTasNet
 from utils import remove_pad
+
+bool_string = lambda the_string : True if the_string == 'True' else False
 
 parser = argparse.ArgumentParser('Separate speech using Conv-TasNet')
 parser.add_argument('--model_path', type=str, required=True,
@@ -32,7 +34,7 @@ parser.add_argument('--sample_rate', default=8000, type=int,
                     help='Sample rate')
 parser.add_argument('--batch_size', default=1, type=int,
                     help='Batch size')
-parser.add_argument('--multichannel',default=False, type=bool)
+parser.add_argument('--multichannel',default=False, type=bool_string)
 parser.add_argument('--num_workers',default=0,type=int)
 parser.add_argument('--figures',default=False,type=bool)
 parser.add_argument('--originals',default=True,type=bool)
@@ -46,10 +48,10 @@ def separate(args):
               "mix_json is ignored.")
     #print(args.multichannel); exit()
     # Load model
-    if args.multichannel:
-        model = MultiConvTasNet.load_model(args.model_path)
-    else:
-        model = ConvTasNet.load_model(args.model_path)
+    # if args.multichannel:
+    #     model = MultiConvTasNet.load_model(args.model_path)
+    # else:
+    model = ConvTasNet.load_model(args.model_path)
     print(model)
     model.figures = args.figures
     model.eval()
@@ -77,13 +79,13 @@ def separate(args):
     with torch.no_grad():
         for (i, data) in enumerate(eval_loader):
             # Get batch data
-            mixture, mix_lengths, filenames = data
+            mixture, mix_lengths, filenames, channels = data
             #if args.use_cuda:
             if True:
                 mixture, mix_lengths = mixture.cuda(), mix_lengths.cuda()
             # Forward
             estimate_source = model(mixture)  # [B, C, T];
-            est_masks = model.get_mask()
+            est_masks = model.get_masks()
             # Remove padding and flat
             flat_estimate = remove_pad(estimate_source, mix_lengths)
 
@@ -107,7 +109,7 @@ def separate(args):
                     filename = os.path.join(args.out_dir,
                                         os.path.basename(filename).strip('.wav'))
                     if args.append_file:
-                        write((flat_estimate[i][c]), filename + '_s{}.wav'.format(c+1),args.sample_rate)
+                        write((flat_estimate[i][c]), filename +".CH"+str(channels[i]) + '_s{}.wav'.format(c+1),args.sample_rate)
                     else:
                         write((flat_estimate[i][c]), filename + '.wav')
 
@@ -143,6 +145,7 @@ def separate(args):
                 #plt.show()
 
                 fig.savefig(filename+ '.png')
+                plt.close()
 
 
 if __name__ == '__main__':

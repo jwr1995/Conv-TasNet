@@ -7,9 +7,9 @@ import models, sdr
 
 
 # Conv-TasNet
-class ConvTasNet(nn.Module):
-    def __init__(self, N=512, B=128, sr=16000, L=32, X=8, R=3, H=512,
-                 P=3, C=2, causal=False, num_channels=1):
+class TasNet(nn.Module):
+    def __init__(self, N=512, sr=16000, L=32, R=3, H=512,
+                 C=2, bidirectional=False):
         """
         N=N
         B=B (number of channels in bottleneck)
@@ -22,55 +22,44 @@ class ConvTasNet(nn.Module):
         self.C = C
 
         self.N = N
-        self.B = B
         self.H = H
         #self.L = int(sr*L/1000)
         self.L = L
         self.stride = self.L // 2
 
-        self.X = X
         self.R = R
-        self.P = P
         self.sr = sr
 
-        self.num_channels = num_channels
-
-        self.causal = causal
+        self.bidirectional = bidirectional
 
         # input encoder
-        self.encoder = nn.Conv1d(num_channels, self.N, self.L, bias=False, stride=self.stride)
-
+        self.encoder_U = nn.Conv1d(1, self.N, self.L, bias=False, stride=self.stride)
+        self.encoder_V = nn.Conv1d(1, self.N, self.L, bias=False, stride=self.stride)
+        self.layer_norm = nn.LayerNorm(self.N)
         # TCN separator
-        self.TCN = models.TCN(self.N, self.N*self.C, self.B, self.H,
-                              self.X, self.R, self.P, causal=self.causal)
-
-        self.receptive_field = self.TCN.receptive_field
+        self.lstm = nn.LSTM(self.N,self.H,self.R)
+        self.softmax = nn.Softmax(self.N*self.C)
 
         # output decoder
-        self.decoder = nn.ConvTranspose1d(self.N, num_channels, self.L, bias=False, stride=self.stride)
-
-        self.masks = None
-
-    get_masks = lambda self : self.masks
+        self.decoder = nn.ConvTranspose1d(self.N, 1, self.L, bias=False, stride=self.stride)
 
     def pad_signal(self, input):
 
         # input is the waveforms: (B, T) or (B, 1, T)
         # reshape and padding
-        if input.dim() not in [3]:
+        if input.dim() not in [2, 3]:
             raise RuntimeError("Input can only be 2 or 3 dimensional.")
 
-        # if input.dim() == 2:
-        #     input = input.unsqueeze(1)
+        if input.dim() == 2:
+            input = input.unsqueeze(1)
         batch_size = input.size(0)
-        nchan = input.size(1)
         nsample = input.size(2)
         rest = self.L - (self.stride + nsample % self.L) % self.L
         if rest > 0:
-            pad = Variable(torch.zeros(batch_size, nchan, rest)).type(input.type())
+            pad = Variable(torch.zeros(batch_size, 1, rest)).type(input.type())
             input = torch.cat([input, pad], 2)
 
-        pad_aux = Variable(torch.zeros(batch_size, nchan, self.stride)).type(input.type())
+        pad_aux = Variable(torch.zeros(batch_size, 1, self.stride)).type(input.type())
         input = torch.cat([pad_aux, input, pad_aux], 2)
 
         return input, rest
@@ -82,21 +71,16 @@ class ConvTasNet(nn.Module):
         batch_size = output.size(0)
 
         # waveform encoder
-        enc_output = self.encoder(output)  # B, N, L
+        enc_output = F.relu(self.encoder_U(output)) * F.sigmoid(self.encoder_V(output)) # B, N, L
 
-        #print(enc_output.shape,self.decoder(enc_output).shape)
         # generate masks
-        self.masks = torch.sigmoid(self.TCN(enc_output)).view(batch_size, self.C, self.N, -1)  # B, C, N, L
-        masked_output = enc_output.unsqueeze(1) * self.masks  # B, C, N, L
-
+        masks = self.softmax(self.layer_norm(enc_output)).view(batch_size, self.C, self.N, -1)  # B, C, N, L
+        masked_output = enc_output.unsqueeze(1) * masks  # B, C, N, L
 
         # waveform decoder
         output = self.decoder(masked_output.view(batch_size*self.C, self.N, -1))  # B*C, 1, L
         output = output[:,:,self.stride:-(rest+self.stride)].contiguous()  # B*C, 1, L
-        if self.num_channels > 1:
-            output = output.view(batch_size, self.C, self.num_channels, -1)  # B, C, T
-        else:
-            output = output.view(batch_size, self.C, -1)  # B, C, T
+        output = output.view(batch_size, self.C, -1)  # B, C, T
 
         return output
 
@@ -134,11 +118,11 @@ class ConvTasNet(nn.Module):
 
 
 def test_conv_tasnet():
-    x = torch.rand(13, 3, 32000).cuda()
-    nnet = ConvTasNet(C=2,num_channels=3).cuda()
+    x = torch.rand(2, 32000).cuda()
+    nnet = ConvTasNet().cuda()
     x = nnet(x)
     s1 = x[0]
-    print(x.shape)
+    print(s1.shape)
 
 
 if __name__ == "__main__":

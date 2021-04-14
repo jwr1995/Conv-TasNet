@@ -19,7 +19,8 @@ create_entries = lambda input_list, nfiles : list(random.permutation(np.array([T
                         nfiles+[False]*(len(input_list)-nfiles))))
 
 def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000,
-                        entries=None, complete=False, export_rms=False):
+                        entries=None, complete=False, export_rms=False,
+                        start_times=False, start_end_times=False):
     file_infos = []
     in_dir = os.path.abspath(in_dir)
     try:
@@ -33,15 +34,23 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000,
     for wav_file in wav_list:
         if not wav_file.endswith('.wav'):
             continue
+
         wav_path = os.path.join(in_dir, wav_file)
         samples = sf.read(wav_path)[0]
         if complete==True:
             for channel in range(samples.shape[1]):
-                 # file path, num samples, num channels, channel idx
-                file_infos.append((wav_path, samples.shape[0],
-                samples.shape[1], channel))
+                if start_end_times:
+                    start_sample = int(np.min(np.nonzero(samples[:,channel])))
+                    end_sample = int(np.max(np.nonzero(samples[:,channel])))
+                else:
+                    start_sample = int(0)
+                    end_sample = samples[:,channel].shape[0]
+                num_samples = samples.shape[0]
+                 # file path, num_samples, num channels, channel idx
+                file_infos.append((wav_path, num_samples,
+                samples.shape[1], channel,start_sample,end_sample))
         else:
-            file_infos.append((wav_path, samples.shape[0], samples.shape[1], 0))
+            file_infos.append((wav_path, num_samples, samples.shape[1], 0))
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
@@ -65,19 +74,30 @@ def preprocess(args):
         for data_type in ['train', 'dev']:
             if data_type == 'train':
                 flist=os.path.join(args.in_dir, args.array, 'noreverb_ref')
+                print(os.path.join(args.in_dir, args.array, 'noreverb_ref'))
                 entries=create_entries(os.listdir(flist), args.nfiles)
                 for source in [args.mix_label, 'noreverb_ref']:
+                    if source == 'noreverb_ref':
+                        start_end_times=True
+                    else:
+                        start_end_times=False
                     preprocess_one_dir(os.path.join(args.in_dir, args.array, source),
                                        os.path.join(args.out_dir, data_type),
                                        source,sample_rate=args.sample_rate,
-                                       entries=entries)
+                                       entries=entries,complete=args.complete,
+                                       start_end_times=start_end_times)
             if data_type == 'dev':
                 for source in [args.mix_label, 'noreverb_ref']:
+                    if source == 'noreverb_ref':
+                        start_times=True
+                    else:
+                        start_times=False
                     preprocess_one_dir(os.path.join(args.dev_dir,
                                 "simu_single_MA/dev_simu_linear_nonuniform_track1",
                                 source),
                                 os.path.join(args.out_dir, data_type),
-                                source, sample_rate=args.sample_rate)
+                                source, sample_rate=args.sample_rate,
+                                complete=args.complete)
 
         for data_type in ['dev','eval']:
             for source in ['real-recording', 'semi-real-playback','semi-real-realspk']:
@@ -88,7 +108,8 @@ def preprocess(args):
                     in_dir = os.path.join(args.eval_dir,source,'1')
                     export_rms=False
                 preprocess_one_dir(in_dir,os.path.join(args.out_dir, data_type),
-                                   source, sample_rate=args.sample_rate,export_rms=export_rms)
+                                   source, sample_rate=args.sample_rate,export_rms=export_rms,
+                                   complete=args.complete)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Corpus data preprocessing")
@@ -108,6 +129,7 @@ if __name__ == "__main__":
     parser.add_argument('--percentage', type=float, default=20.0)
     parser.add_argument('--mix-label', type=str, default="mix")
     parser.add_argument('--nfiles',type=int, default=6)
+    parser.add_argument('--complete',type=bool, default=False)
     args = parser.parse_args()
     print(args)
     preprocess(args)

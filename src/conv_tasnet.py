@@ -57,11 +57,11 @@ class ConvTasNet(nn.Module):
 
         # input is the waveforms: (B, T) or (B, 1, T)
         # reshape and padding
-        if input.dim() not in [3]:
+        if input.dim() not in [2,3]:
             raise RuntimeError("Input can only be 2 or 3 dimensional.")
 
-        # if input.dim() == 2:
-        #     input = input.unsqueeze(1)
+        if input.dim() == 2:
+            input = input.unsqueeze(1)
         batch_size = input.size(0)
         nchan = input.size(1)
         nsample = input.size(2)
@@ -81,6 +81,7 @@ class ConvTasNet(nn.Module):
         output, rest = self.pad_signal(input)
         batch_size = output.size(0)
 
+        #print(output.shape);exit()
         # waveform encoder
         enc_output = self.encoder(output)  # B, N, L
 

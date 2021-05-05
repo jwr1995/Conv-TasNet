@@ -5,9 +5,12 @@ import os
 import time
 
 import torch
-
+import matplotlib.pyplot as plt
+import numpy as np
 from pit_criterion import cal_loss
-from loss import sisnr_loss
+from loss import sisnr_loss, sisnr_rms_loss
+
+import soundfile as sf
 
 #torch.autograd.set_detect_anomaly(True)
 
@@ -28,6 +31,8 @@ class Solver(object):
         self.max_norm = args.max_norm
         # save and load model
         self.save_folder = args.save_folder
+        self.figure_folder = os.path.join(self.save_folder,"figs")
+        os.makedirs(self.figure_folder,exist_ok=True)
         self.checkpoint = args.checkpoint
         self.continue_from = args.continue_from
         self.model_path = args.model_path
@@ -41,7 +46,10 @@ class Solver(object):
         self.visdom_id = args.visdom_id
         self.corpus = args.corpus
         self.C = args.C
-
+        self.loss_dict = {'sisnr':sisnr_loss, 'sisnrrms':sisnr_rms_loss,
+        'mse':torch.nn.MSELoss()}
+        self.loss = self.loss_dict[args.loss]
+        print(self.loss)
         if self.visdom:
             from visdom import Visdom
             self.vis = Visdom(env=self.visdom_id)
@@ -72,6 +80,10 @@ class Solver(object):
         self.halving = False
         self.val_no_impv = 0
 
+    def write_csv_line(self, fname, epoch, avg_loss):
+        with open(fname, "a") as f:
+            f.write(",".join([str(epoch),str(avg_loss)]+"\n"))
+
     def train(self):
         # Train model multi-epoches
         for epoch in range(self.start_epoch, self.epochs):
@@ -85,6 +97,7 @@ class Solver(object):
                   'Train Loss {2:.3f}'.format(
                       epoch + 1, time.time() - start, tr_avg_loss))
             print('-' * 85)
+            self.write_csv_line("train.csv",epoch,tr_avg_loss)
 
             # Save model each epoch
             if self.checkpoint:
@@ -106,7 +119,7 @@ class Solver(object):
                   'Valid Loss {2:.3f}'.format(
                       epoch + 1, time.time() - start, val_loss))
             print('-' * 85)
-
+            self.write_csv_line("valid.csv",epoch,tr_avg_loss)
             # Adjust learning rate (halving)
             if self.half_lr:
                 if val_loss >= self.prev_val_loss:
@@ -178,7 +191,14 @@ class Solver(object):
             #if self.corpus=='wsj0':
             #print(data[0],data[1],data[2],data[3]); exit()
             padded_mixture, mixture_lengths, padded_source = data
-            
+            #sf.write("padded_mixture.wav",padded_source[0][0])
+            # fig, ax = plt.subplots(2)
+            # ax[0].specgram(padded_source[0][0])
+            # ax[0].set_title('padded_source')
+            # ax[1].specgram(padded_mixture[0])
+            # ax[1].set_title('padded_mixture')
+            # plt.show()
+            # exit()
             if self.use_cuda:
                 padded_mixture = padded_mixture.cuda()
                 mixture_lengths = mixture_lengths.cuda()
@@ -186,7 +206,40 @@ class Solver(object):
             estimate_source = self.model(padded_mixture)
 
             if self.C == 1:
-                loss = sisnr_loss(estimate_source,padded_source)
+                loss = self.loss(estimate_source,padded_source)
+                if i % 1000 == 0:
+
+                    y=padded_source.detach().cpu()[0][0]
+                    z=estimate_source.detach().cpu()[0][0]
+                    x=padded_mixture.detach().cpu()[0]
+                    fig, ax = plt.subplots(3,figsize=(15,10))
+                    ax[0].specgram(x)
+                    ax[0].set_title('padded_mixture')
+                    ax[1].specgram(y)
+                    ax[1].set_title('padded_source')
+                    ax[2].specgram(z)
+                    ax[2].set_title('estimate_source')
+                    plt.savefig(os.path.join(self.figure_folder,
+                    ".".join(["specgram",str(epoch),str(i),"png"])))
+
+                    fig, ax = plt.subplots(5,figsize=(15,15))
+                    ax[0].plot(x)
+                    ax[0].set_title('padded_mixture')
+                    ax[0].set_ylim([-0.5, 0.5])
+                    ax[1].plot(y)
+                    ax[1].set_title('padded_source')
+                    ax[1].set_ylim([-0.5, 0.5])
+                    ax[2].plot(z)
+                    ax[2].set_title('estimate_source')
+                    ax[2].set_ylim([-0.5, 0.5])
+                    ax[3].plot(np.absolute(y-z))
+                    ax[3].set_title('abs(padded_source-estimate_source)')
+                    ax[3].set_ylim([0,1])
+                    ax[4].plot(np.absolute(x-y))
+                    ax[4].set_title('abs(padded_mixture-padded_source)')
+                    ax[4].set_ylim([0, 1])
+                    plt.savefig(os.path.join(self.figure_folder,
+                    ".".join(["plot",str(epoch),str(i),"png"])))
             else:
                 loss, max_snr, estimate_source, reorder_estimate_source = \
                 cal_loss(padded_source, estimate_source, mixture_lengths)
@@ -205,7 +258,7 @@ class Solver(object):
             total_loss += loss.item()
 
             if i % self.print_freq == 0:
-                print('Epoch {0} | Iter {1} | Average Loss {2:.3f} | '
+                print('Epoch {0} | Iter {1} | Average Loss {2:.6f} | '
                       'Current Loss {3:.6f} | {4:.1f} ms/batch'.format(
                           epoch + 1, i + 1, total_loss / (i + 1),
                           loss.item(), 1000 * (time.time() - start) / (i + 1)),

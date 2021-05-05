@@ -42,7 +42,7 @@ fi
 
 if [[ $(hostname) = pegasus ]]
 then
-  stage=4  # Modify this to control to start from which stage
+  stage=2  # Modify this to control to start from which stage
 else
   stage=1
 fi
@@ -62,20 +62,20 @@ else
 fi
 
 sample_rate=16000
-segment=6  # seconds
+segment=3  # seconds
 cv_maxlen=4   # seconds
 # Network config
 
-N=4096
-L=640
+N=512
+L=80
 B=256
 H=512
 P=3
-X=8 # switched
-R=4 # switched
+X=4 # switched
+R=8 # switched
 
 norm_type=gLN
-causal=1
+causal=0
 mask_nonlinear='sigmoid'
 C=1
 # Training config
@@ -88,17 +88,18 @@ max_norm=3
 # minibatch
 shuffle=1
 
-batch_size=16
-num_workers=16
+batch_size=4
+num_workers=8
 
 # optimizer
 optimizer=adam
+loss="sisnrrms"
 lr=1e-3
 momentum=0
 l2=0.01
 # save and visualize
 checkpoint=1
-continue_from=""
+continue_from=
 print_freq=10
 visdom=0
 visdom_epoch=0
@@ -111,13 +112,13 @@ figures=True
 #corpus params
 corpus=cs21
 array=simu_non_uniform
-multichannel=0
+multichannel=False
 mix_label="reverb_ref"
 
 # -- END Conv-TasNet Config
 
 # exp tag
-tag= # tag for managing experiments.
+tag=TEST # tag for managing experiments.
 
 ngpu=1  # always 1
 
@@ -194,9 +195,10 @@ if [ $stage -le 2 ]; then
     --multichannel $multichannel \
     --mix-label $mix_label \
     --rms-dir $valid_dir \
+    --loss $loss
     #>> $expdir/train.log
 fi
-
+exit
 cp run.sh.log $expdir/run.sh.log
 
 # if [ $stage -le 3 ]; then

@@ -109,6 +109,7 @@ parser.add_argument('--mode', default="ss", type=str)
 parser.add_argument('--subtract', default=False, type=bool_string)
 parser.add_argument('--mix-label',default='mix',type=str)
 parser.add_argument('--rms-dir',default=None,type=str)
+parser.add_argument('--loss',default='sisnr',type=str)
 
 def main(args):
     # Construct Solver

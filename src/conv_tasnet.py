@@ -8,8 +8,8 @@ import models, sdr
 
 # Conv-TasNet
 class ConvTasNet(nn.Module):
-    def __init__(self, N=512, B=128, sr=16000, L=32, X=8, R=3, H=512,
-                 P=3, C=2, causal=False, num_channels=1):
+    def __init__(self, N=512, B=128, sr=16000, L=40, X=8, R=3, H=512,
+                 P=3, C=2, causal=False, num_channels=1, depth=1):
         """
         N=N
         B=B (number of channels in bottleneck)
@@ -34,11 +34,18 @@ class ConvTasNet(nn.Module):
         self.sr = sr
 
         self.num_channels = num_channels
+        self.depth = depth
 
         self.causal = causal
-
+        print("Causal:",self.causal)
         # input encoder
-        self.encoder = nn.Conv1d(num_channels, self.N, self.L, bias=False, stride=self.stride)
+        if self.depth == 1:
+            self.encoder = nn.Conv1d(self.num_channels, self.N, self.L, bias=False, stride=self.stride)
+        elif self.depth == 2:
+            self.encoder = nn.Sequential(nn.Conv1d(self.num_channels, self.N, self.L, bias=False, stride=self.stride),
+                                nn.Conv1d(self.N, self.N, 1, bias=False, stride=1))
+        else:
+             self.encoder = nn.Conv1d(self.num_channels, self.N, self.L, bias=False, stride=self.stride)
 
         # TCN separator
         self.TCN = models.TCN(self.N, self.N*self.C, self.B, self.H,
@@ -47,7 +54,11 @@ class ConvTasNet(nn.Module):
         self.receptive_field = self.TCN.receptive_field
 
         # output decoder
-        self.decoder = nn.ConvTranspose1d(self.N, num_channels, self.L, bias=False, stride=self.stride)
+        if self.depth == 1:
+            self.decoder = nn.ConvTranspose1d(self.N, self.num_channels, self.L, bias=False, stride=self.stride)
+        elif self.depth == 2:
+            self.decoder = nn.Sequential(nn.ConvTranspose1d(self.N,self.N, 1, bias=False, stride=1),
+                                         nn.ConvTranspose1d(self.N, self.num_channels, self.L, bias=False, stride=self.stride))
 
         self.masks = None
 
@@ -135,8 +146,10 @@ class ConvTasNet(nn.Module):
 
 
 def test_conv_tasnet():
-    x = torch.rand(13, 3, 32000).cuda()
-    nnet = ConvTasNet(C=2,num_channels=3).cuda()
+    nchan=3
+    x = torch.rand(13, nchan, 32000).cuda()
+    nnet = ConvTasNet(C=1,num_channels=nchan,depth=1).cuda()
+    #print(nnet.receptive_field)
     x = nnet(x)
     s1 = x[0]
     print(x.shape)

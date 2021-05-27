@@ -50,7 +50,14 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000,
                 file_infos.append((wav_path, num_samples,
                 samples.shape[1], channel,start_sample,end_sample))
         else:
-            file_infos.append((wav_path, num_samples, samples.shape[1], 0))
+            if start_end_times:
+                start_sample = int(np.min(np.nonzero(samples[:,0])))
+                end_sample = int(np.max(np.nonzero(samples[:,0])))
+            else:
+                start_sample = int(0)
+                end_sample = samples[:,0].shape[0]
+            file_infos.append((wav_path, num_samples, samples.shape[1], 
+            samples.shape[0], start_sample, end_sample))
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)

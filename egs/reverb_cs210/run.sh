@@ -5,8 +5,8 @@
 # Adapted 2021/02
 # Author: William Ravenscroft
 # Ensure Anaconda is initialized before proceeding :-
-# source /share/mini1/usr/will/miniconda3/bin/activate
-# conda init
+source /share/mini1/usr/will/miniconda3/bin/activate
+conda init
 
 if [[ $(hostname) = node27 ]]
 then
@@ -35,7 +35,7 @@ then
 else
   export NCCL_SOCKET_IFNAME=virbr0
   export NCCL_IB_DISABLE=1
-  train_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs/train
+  train_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/ConferencingSpeech2021/simulation/data/wavs/train10k
   dev_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/Train_dev_dataset/Development_test_set/
   eval_data=/share/mini1/data/audvis/pub/se/mchan/mult/ConferencingSpeech/v1/Train_dev_dataset/Evaluation_set/eval_data/task1/
 fi
@@ -44,7 +44,7 @@ if [[ $(hostname) = pegasus ]]
 then
   stage=2  # Modify this to control to start from which stage
 else
-  stage=1
+  stage=2
 fi
 
 dumpdir=data  # directory to put generated json file
@@ -61,9 +61,9 @@ else
   nfiles=10000
 fi
 
-sample_rate=16000
-segment=3  # seconds
-cv_maxlen=4   # seconds
+sample_rate=16000 
+segment=4  # seconds
+cv_maxlen=3   # seconds
 # Network config
 
 N=512
@@ -71,8 +71,8 @@ L=80
 B=256
 H=512
 P=3
-X=4 # switched
-R=8 # switched
+X=8 # switched
+R=4 # switched
 
 norm_type=gLN
 causal=0
@@ -88,18 +88,18 @@ max_norm=3
 # minibatch
 shuffle=1
 
-batch_size=4
-num_workers=8
+batch_size=16
+num_workers=16
 
 # optimizer
-optimizer=adam
-loss="sisnrrms"
-lr=1e-3
+optimizer=sgd
+loss="mse"
+lr=1e-2
 momentum=0
 l2=0.01
 # save and visualize
 checkpoint=1
-continue_from=
+# continue_from="/share/mini1/usr/will/sw/Conv-TasNet/egs/reverb_cs210/exp/train_r16000_N512_L80_B256_H512_P3_X8_R4_C1_gLN_causal0_sigmoid_epoch100_half1_norm3_bs16_worker16_sgd_lr1e-3_mmt0_l20.01_losssisnr_train/epoch98.pth.tar"
 print_freq=10
 visdom=0
 visdom_epoch=0
@@ -118,7 +118,7 @@ mix_label="reverb_ref"
 # -- END Conv-TasNet Config
 
 # exp tag
-tag=TEST # tag for managing experiments.
+tag= # tag for managing experiments.
 
 ngpu=1  # always 1
 
@@ -143,7 +143,7 @@ if [ $stage -le 1 ]; then
 fi
 
 if [ -z ${tag} ]; then
-  expdir=exp/train_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_`basename $train_dir`
+  expdir=exp/train_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_loss${loss}_`basename $train_dir`
 else
   expdir=exp/train_${tag}
 fi
@@ -195,11 +195,11 @@ if [ $stage -le 2 ]; then
     --multichannel $multichannel \
     --mix-label $mix_label \
     --rms-dir $valid_dir \
-    --loss $loss
-    #>> $expdir/train.log
+    --loss $loss \
+    >> $expdir/train.log
 fi
-exit
-cp run.sh.log $expdir/run.sh.log
+
+
 
 # if [ $stage -le 3 ]; then
 #   echo "Stage 3: Evaluate separation performance"
@@ -226,8 +226,8 @@ if [ $stage -le 3 ]; then
     --sample_rate $sample_rate \
     --batch_size 1 \
     --multichannel $multichannel \
-    --mix-label $mix_label
-    #> $expdir/eval.log
+    --mix-label $mix_label \
+    >> $expdir/eval.log
 fi
 
 if [ $stage -le 4 ]; then
@@ -254,6 +254,6 @@ if [ $stage -le 4 ]; then
     --figure $figures \
     --originals True \
     --append_file False \
-    #> $expdir/separate.log
+    > $expdir/separate.log
   done
 fi

@@ -123,7 +123,7 @@ class ConvTasNet(nn.Module):
     def load_model_from_package(cls, package):
         model = cls(N=package['N'], B=package['B'], sr=package['sr'], L=package['L'],
                     X=package['X'], R=package['R'], H=package['H'], P=package['P'],
-                    C=package['C'], causal=package['causal'])
+                    C=package['C'], causal=package['causal'], num_channels=package['num_channels'], depth=package['depth'])
         model.load_state_dict(package['state_dict'])
         return model
 
@@ -133,7 +133,7 @@ class ConvTasNet(nn.Module):
             # hyper-parameter
             'N': model.N, 'L': model.L, 'B': model.B, 'H': model.H,
             'P': model.P, 'X': model.X, 'R': model.R, 'C': model.C,
-            'causal': model.causal, 'sr': model.sr,
+            'causal': model.causal, 'sr': model.sr, 'num_channels': model.num_channels, 'depth': model.depth,
             # state
             'state_dict': model.state_dict(),
             'optim_dict': optimizer.state_dict(),

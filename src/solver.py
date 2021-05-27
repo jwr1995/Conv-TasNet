@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pit_criterion import cal_loss
 from loss import sisnr_loss, sisnr_rms_loss
+from torch_stoi import NegSTOILoss
 
 import soundfile as sf
 
@@ -46,8 +47,10 @@ class Solver(object):
         self.visdom_id = args.visdom_id
         self.corpus = args.corpus
         self.C = args.C
+        self.neg_stoi_loss = NegSTOILoss(sample_rate=16000)
+        if self.use_cuda: self.neg_stoi_loss = self.neg_stoi_loss.cuda()
         self.loss_dict = {'sisnr':sisnr_loss, 'sisnrrms':sisnr_rms_loss,
-        'mse':torch.nn.MSELoss()}
+        'mse':torch.nn.MSELoss(), 'stoi': (lambda estimate, source : self.neg_stoi_loss(estimate,source).mean())}
         self.loss = self.loss_dict[args.loss]
         print(self.loss)
         if self.visdom:
@@ -82,7 +85,7 @@ class Solver(object):
 
     def write_csv_line(self, fname, epoch, avg_loss):
         with open(fname, "a") as f:
-            f.write(",".join([str(epoch),str(avg_loss)]+"\n"))
+            f.write(",".join([str(epoch),str(avg_loss)])+"\n")
 
     def train(self):
         # Train model multi-epoches
@@ -97,7 +100,7 @@ class Solver(object):
                   'Train Loss {2:.3f}'.format(
                       epoch + 1, time.time() - start, tr_avg_loss))
             print('-' * 85)
-            self.write_csv_line("train.csv",epoch,tr_avg_loss)
+            self.write_csv_line(os.path.join(self.save_folder,"train.csv"),epoch,tr_avg_loss)
 
             # Save model each epoch
             if self.checkpoint:
@@ -119,7 +122,7 @@ class Solver(object):
                   'Valid Loss {2:.3f}'.format(
                       epoch + 1, time.time() - start, val_loss))
             print('-' * 85)
-            self.write_csv_line("valid.csv",epoch,tr_avg_loss)
+            self.write_csv_line(os.path.join(self.save_folder,"valid.csv"),epoch,val_loss)
             # Adjust learning rate (halving)
             if self.half_lr:
                 if val_loss >= self.prev_val_loss:

@@ -110,6 +110,8 @@ parser.add_argument('--subtract', default=False, type=bool_string)
 parser.add_argument('--mix-label',default='mix',type=str)
 parser.add_argument('--rms-dir',default=None,type=str)
 parser.add_argument('--loss',default='sisnr',type=str)
+parser.add_argument('--num_channels',default=1,type=int)
+parser.add_argument('--depth',default=1,type=int)
 
 def main(args):
     # Construct Solver
@@ -133,7 +135,7 @@ def main(args):
     # model
     #if args.multichannel == False:
     model = ConvTasNet(N=args.N, L=args.L, B=args.B, H=args.H, P=args.P, X=args.X, R=args.R,
-                       C=args.C, causal=args.causal)
+                       C=args.C, causal=args.causal, depth=args.depth, num_channels=args.num_channels)
     # else:
     #     model = MultiConvTasNet(args.N,args.L, args.B, args.H, args.P, args.X, args.R,
     #                    args.C, norm_type=args.norm_type, causal=args.causal,

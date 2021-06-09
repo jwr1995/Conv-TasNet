@@ -53,14 +53,7 @@ class Solver(object):
         'mse':torch.nn.MSELoss(), 'stoi': (lambda estimate, source : self.neg_stoi_loss(estimate,source).mean())}
         self.loss = self.loss_dict[args.loss]
         print(self.loss)
-        if self.visdom:
-            from visdom import Visdom
-            self.vis = Visdom(env=self.visdom_id)
-            self.vis_opts = dict(title=self.visdom_id,
-                                 ylabel='Loss', xlabel='Epoch',
-                                 legend=['train loss', 'cv loss'])
-            self.vis_window = None
-            self.vis_epochs = torch.arange(1, self.epochs + 1)
+        
 
         self._reset()
 
@@ -157,37 +150,12 @@ class Solver(object):
                            file_path)
                 print("Find better validated model, saving to %s" % file_path)
 
-            # visualizing loss using visdom
-            if self.visdom:
-                x_axis = self.vis_epochs[0:epoch + 1]
-                y_axis = torch.stack(
-                    (self.tr_loss[0:epoch + 1], self.cv_loss[0:epoch + 1]), dim=1)
-                if self.vis_window is None:
-                    self.vis_window = self.vis.line(
-                        X=x_axis,
-                        Y=y_axis,
-                        opts=self.vis_opts,
-                    )
-                else:
-                    self.vis.line(
-                        X=x_axis.unsqueeze(0).expand(y_axis.size(
-                            1), x_axis.size(0)).transpose(0, 1),  # Visdom fix
-                        Y=y_axis,
-                        win=self.vis_window,
-                        update='replace',
-                    )
-
+            
     def _run_one_epoch(self, epoch, cross_valid=False):
         start = time.time()
         total_loss = 0
         data_loader = self.tr_loader if not cross_valid else self.cv_loader
-        # visualizing loss using visdom
-        if self.visdom_epoch and not cross_valid:
-            vis_opts_epoch = dict(title=self.visdom_id + " epoch " + str(epoch),
-                                  ylabel='Loss', xlabel='Epoch')
-            vis_window_epoch = None
-            vis_iters = torch.arange(1, len(data_loader) + 1)
-            vis_iters_loss = torch.Tensor(len(data_loader))
+        if not cross_valid: data_loader.dataset.update_segments(epoch)
         for i, (data) in enumerate(data_loader):
             #if i<1700: continue
             #print(data)
@@ -208,6 +176,7 @@ class Solver(object):
                 padded_source = padded_source.cuda()
             estimate_source = self.model(padded_mixture)
 
+            print(estimate_source.shape, padded_source.shape)
             if self.C == 1:
                 loss = self.loss(estimate_source,padded_source)
                 if i % 1000 == 0:
@@ -267,17 +236,6 @@ class Solver(object):
                           loss.item(), 1000 * (time.time() - start) / (i + 1)),
                       flush=True)
 
-            # visualizing loss using visdom
-            if self.visdom_epoch and not cross_valid:
-                vis_iters_loss[i] = loss.item()
-                if i % self.print_freq == 0:
-                    x_axis = vis_iters[:i+1]
-                    y_axis = vis_iters_loss[:i+1]
-                    if vis_window_epoch is None:
-                        vis_window_epoch = self.vis.line(X=x_axis, Y=y_axis,
-                                                         opts=vis_opts_epoch)
-                    else:
-                        self.vis.line(X=x_axis, Y=y_axis, win=vis_window_epoch,
-                                      update='replace')
+           
 
         return total_loss / (i + 1)

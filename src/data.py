@@ -22,7 +22,7 @@ import json
 import math
 import os
 import glob
-import csv
+import csv 
 import soundfile as sf
 
 import numpy as np
@@ -37,7 +37,7 @@ from signalprocessing import rms
 class AudioDataset(data.Dataset):
 
     def __init__(self, json_dir, batch_size, args=None, sample_rate=8000,
-                segment=4.0, cv_maxlen=8.0, multi=False, mode="ss", mix_label="mix"):
+                segments=[1,2,4], stops=[10,20], cv_maxlen=8.0, multi=False, mode="ss", mix_label="mix", epochs=100):
         """
         Args:
             json_dir: directory including mix.json, s1.json and s2.json
@@ -48,6 +48,26 @@ class AudioDataset(data.Dataset):
         super(AudioDataset, self).__init__()
         self.multi=multi
         self.mix_label=mix_label
+        self.epochs=100
+        self.segments=segments
+        self.stops=stops
+        self.batch_size=batch_size
+        self.sample_rate=sample_rate
+        self.segments=segments
+        self.C = args.C
+        self.mode=mode
+        self.corpus=args.corpus
+        self.cv_maxlen=cv_maxlen
+        self.segment=segments[0]
+
+        assert len(segments) == len(stops)+1, "There should be one more segment length than stopping epoch"
+
+        self.segment_length = np.zeros(self.epochs,dtype=np.int8)
+        last=0
+        for i in range(len(self.stops)):
+            self.segment_length[last:self.stops[i]] = self.segments[i]
+            last = i
+        self.segment_length[self.stops[i]:]
 
         if  args.corpus == "cs21":
             mix_json = os.path.join(json_dir, self.mix_label+'.json')
@@ -66,16 +86,33 @@ class AudioDataset(data.Dataset):
         # sort it by #samples (impl bucket)
         def sort(infos): return sorted(
             infos, key=lambda info: int(info[1]), reverse=True)
-        sorted_mix_infos = sort(mix_infos)
-        sorted_s1_infos = sort(s1_infos)
+        self.sorted_mix_infos = sort(mix_infos)
+        self.sorted_s1_infos = sort(s1_infos)
         if args.C == 2 and mode == "ss":
-            sorted_s2_infos = sort(s2_infos)
+            self.sorted_s2_infos = sort(s2_infos)
 
-        if segment >= 0.0:
+        self.minibatch = []
+        self.update_segments(0,True)
+        print("Mini batch length =",len(self.minibatch), mix_label)
+        
+
+    def __getitem__(self, index):
+        return self.minibatch[index]
+
+    def __len__(self):
+        return len(self.minibatch)
+
+    def update_segments(self,epoch,init=False):
+        if (self.segment == self.segment_length[epoch]) and not init:
+            return
+        
+        self.segment=self.segment_length[epoch]
+        print(self.segment)
+        if self.segment >= 0.0:
             # segment length and count dropped utts
-            segment_len = int(segment * sample_rate)  # 4s * 8000/s = 32000 samples
+            segment_len = int(self.segment * self.sample_rate)  # 4s * 8000/s = 32000 samples
             drop_utt, drop_len = 0, 0
-            for cells in sorted_mix_infos:
+            for cells in self.sorted_mix_infos:
                 if len(cells) == 4:
                     _, sample, cs, c = cells
                 elif len(cells) == 5:
@@ -86,72 +123,69 @@ class AudioDataset(data.Dataset):
                     drop_utt += 1
                     drop_len += sample
             print("Drop {} utts({:.2f} h) which is short than {} samples".format(
-                drop_utt, drop_len/sample_rate/36000, segment_len))
+                drop_utt, drop_len/self.sample_rate/36000, segment_len))
             # generate minibach infomations
             minibatch = []
             start = 0
             while True:
                 num_segments = 0
                 end = start
-                if args.corpus == "cs21":
+                if self.corpus == "cs21":
                     part_mix, part_s1 = [], []
                 else:
                     part_mix, part_s1, part_s2 = [], [], []
-                while num_segments < batch_size and end < len(sorted_mix_infos):
-                    utt_len = int(sorted_mix_infos[end][1])
+                while num_segments < self.batch_size and end < len(self.sorted_mix_infos):
+                    utt_len = int(self.sorted_mix_infos[end][1])
+                    
                     if utt_len >= segment_len:  # skip too short utt
                         num_segments += math.ceil(utt_len / segment_len)
                         # Ensure num_segments is less than batch_size
-                        if num_segments > batch_size:
-                            # if num_segments of 1st audio > batch_size, skip it
-                            if start == end: end += 1
-                            break
-                        part_mix.append(sorted_mix_infos[end])
-                        part_s1.append(sorted_s1_infos[end])
-                        if args.C==2 and mode=="ss":
-                            part_s2.append(sorted_s2_infos[end])
+                        print(num_segments,self.batch_size); 
+                        # if num_segments > self.batch_size:
+                        #     # if num_segments of 1st audio > batch_size, skip it
+                        #     if start == end: end += 1
+                        #     break
+                        part_mix.append(self.sorted_mix_infos[end])
+                        part_s1.append(self.sorted_s1_infos[end])
+                        print((part_mix),(part_s1))
+                        if self.C==2 and self.mode=="ss":
+                            part_s2.append(self.sorted_s2_infos[end])   
                     end += 1
                 if len(part_mix) > 0:
-                    if args.corpus == "wsj0":
+                    if self.corpus == "wsj0":
                         minibatch.append([part_mix, part_s1, part_s2,
-                                      sample_rate, segment_len])
+                                      self.sample_rate, segment_len])
                     else:
                         minibatch.append([part_mix, part_s1,
-                                      sample_rate, segment_len])
-                if end == len(sorted_mix_infos):
+                                      self.sample_rate, segment_len])
+                if end == len(self.sorted_mix_infos):
                     break
                 start = end
+            
             self.minibatch = minibatch
         else:  # Load full utterance but not segment
             # generate minibach infomations
             minibatch = []
             start = 0
             while True:
-                end = min(len(sorted_mix_infos), start + batch_size)
+                end = min(len(self.sorted_mix_infos), start + self.batch_size)
                 # Skip long audio to avoid out-of-memory issue
-                if args.corpus == "wsj0" and int(sorted_mix_infos[start][1]) > cv_maxlen * sample_rate:
+                if self.corpus == "wsj0" and int(self.sorted_mix_infos[start][1]) > self.cv_maxlen * self.sample_rate:
                     start = end
                     continue
-                if args.corpus == "wsj0":
-                    minibatch.append([sorted_mix_infos[start:end],
-                                  sorted_s1_infos[start:end],
-                                  sorted_s2_infos[start:end],
-                                  sample_rate, segment])
+                if self.corpus == "wsj0":
+                    minibatch.append([self.sorted_mix_infos[start:end],
+                                  self.sorted_s1_infos[start:end],
+                                  self.sorted_s2_infos[start:end],
+                                 self.sample_rate, self.segment])
                 else:
-                    minibatch.append([sorted_mix_infos[start:end],
-                                  sorted_s1_infos[start:end],
-                                  sample_rate, segment])
-                if end == len(sorted_mix_infos):
+                    minibatch.append([self.sorted_mix_infos[start:end],
+                                  self.sorted_s1_infos[start:end],
+                                  self.sample_rate, self.segment])
+                if end == len(self.sorted_mix_infos):
                     break
                 start = end
             self.minibatch = minibatch
-
-    def __getitem__(self, index):
-        return self.minibatch[index]
-
-    def __len__(self):
-        return len(self.minibatch)
-
 _MULTICHANNEL=False
 _SUBTRACT=False
 _USE_RMS=False
@@ -225,6 +259,7 @@ def _collate_fn(batch):
 # Eval data part
 from preprocess import preprocess_one_dir
 
+
 class EvalDataset(data.Dataset):
 
     def __init__(self, mix_dir, mix_json, batch_size, sample_rate=8000, mix_label="mix"):
@@ -245,15 +280,15 @@ class EvalDataset(data.Dataset):
         # sort it by #samples (impl bucket)
         def sort(infos): return sorted(
             infos, key=lambda info: int(info[1]), reverse=True)
-        sorted_mix_infos = sort(mix_infos)
+        self.sorted_mix_infos = sort(mix_infos)
         # generate minibach infomations
         minibatch = []
         start = 0
         while True:
-            end = min(len(sorted_mix_infos), start + batch_size)
-            minibatch.append([sorted_mix_infos[start:end],
+            end = min(len(self.sorted_mix_infos), start + batch_size)
+            minibatch.append([self.sorted_mix_infos[start:end],
                               sample_rate])
-            if end == len(sorted_mix_infos):
+            if end == len(self.sorted_mix_infos):
                 break
             start = end
         self.minibatch = minibatch
@@ -297,7 +332,7 @@ def _collate_fn_eval(batch):
     else:
         ilens = np.array([mix.shape[0] for mix in mixtures])
 
-    # perform padding and convert to tensor
+    # perform padding and convert to tensor 
     pad_value = 0
     mixtures_pad = pad_list([torch.from_numpy(mix).float()
                              for mix in mixtures], pad_value, multichannel=_MULTICHANNEL)
@@ -307,10 +342,12 @@ def _collate_fn_eval(batch):
     else:
         return mixtures_pad, ilens, filenames, channels
 
+def remove_dc(data):
+    mean = np.mean(data, -1)
+    data = data - mean
+    return data
 
-def rms_normalize(sig, rms_value=0.5):
-    sig = sig*(rms_value/rms(sig))
-    return sig
+rms_normalization = lambda wav, target_loudness=100, ref_loudness=100 : (10**(target_loudness/20))*(10**(-ref_loudness/20))/np.sqrt(np.mean(np.square(wav)))*wav
 
 def peak_normalize(sig):
     max_val = np.max(np.abs(sig))
@@ -358,28 +395,28 @@ def load_mixtures_and_sources(batch, multichannel=False, subtract=False, eval=Fa
         #s1, _ = librosa.load(s1_path, sr=sample_rate)
         if multichannel == False:
             # 1 x samples
-            mix = sf.read(mix_path)[0][start_sample:end_sample,channel]
+            mix = remove_dc(sf.read(mix_path)[0][start_sample:end_sample,channel])
             if eval:
                 s1 = sf.read(s1_path)[0][:,channel]
             else:
-                #s1 = rms_normalize(sf.read(s1_path)[0][start_sample:,channel],rms_value=0.2)
+                #s1 = rms_normalization(remove_dc(sf.read(s1_path)[0][start_sample:end_sample,channel]),target_loudness=75)
                 s1 = sf.read(s1_path)[0][start_sample:end_sample,channel]
         else:
             # channels x samples
             mix = sf.read(mix_path)[0].T
             if eval:
-                #s1 = rms_normalize(sf.read(s1_path)[0][:,0],rms_value=0.2)
+                #s1 = rms_normalization(remove_dc(sf.read(s1_path)[0][:,0]),target_loudness=75)
                 s1 = sf.read(s1_path)[0][:,0]
             else:
-                #s1 = rms_normalize(sf.read(s1_path)[0][:,0],rms_value=0.2)
+                #s1 = rms_normalization(remove_dc(sf.read(s1_path)[0][:,0]),target_loudness=75)
                 s1 = sf.read(s1_path)[0][:,0]
             # import matplotlib.pyplot as plt
             # plt.plot(s1)
             # plt.show()
 
         if C==2:
-            #s2 = rms_normalize(sf.read(s2_path)[:,0],rms_value=0.2)
-            s2 = sf.read(s2_path)[:,0],rms_value=0.2
+            s2 = sf.read(s2_path)[:,0]
+            #s2 = rms_normalization(sf.read(s2_path)[:,0],target_loudness=70)
         elif subtract:
             s2 = mix-s1
 

@@ -94,7 +94,7 @@ class ConvTasNet(nn.Module):
 
         #print(output.shape);exit()
         # waveform encoder
-        enc_output = self.encoder(output)  # B, N, L
+        enc_output = F.relu(self.encoder(output))  # B, N, L
 
         #print(enc_output.shape,self.decoder(enc_output).shape)
         # generate masks
@@ -147,8 +147,8 @@ class ConvTasNet(nn.Module):
 
 def test_conv_tasnet():
     nchan=3
-    x = torch.rand(13, nchan, 32000).cuda()
-    nnet = ConvTasNet(C=1,num_channels=nchan,depth=1).cuda()
+    x = torch.rand(13, nchan, 32000)
+    nnet = ConvTasNet(C=1,num_channels=nchan,depth=1)
     #print(nnet.receptive_field)
     x = nnet(x)
     s1 = x[0]

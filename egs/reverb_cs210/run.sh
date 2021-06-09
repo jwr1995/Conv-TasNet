@@ -62,9 +62,12 @@ else
 fi
 
 sample_rate=16000 
-segment=4  # seconds
+segments="1,3,4"  # seconds
+stops="10,20" # when to change segment lengths
 cv_maxlen=3   # seconds
 # Network config
+
+model="convtasnet"
 
 N=512
 L=80
@@ -75,9 +78,10 @@ X=8 # switched
 R=4 # switched
 
 norm_type=gLN
-causal=0
+causal=False
 mask_nonlinear='sigmoid'
 C=1
+
 # Training config
 use_cuda=1
 id=0,1,2,3
@@ -88,18 +92,18 @@ max_norm=3
 # minibatch
 shuffle=1
 
-batch_size=16
-num_workers=16
+batch_size=1
+num_workers=0
 
 # optimizer
 optimizer=sgd
-loss="mse"
+loss="sisnr"
 lr=1e-2
 momentum=0
 l2=0.01
 # save and visualize
 checkpoint=1
-# continue_from="/share/mini1/usr/will/sw/Conv-TasNet/egs/reverb_cs210/exp/train_r16000_N512_L80_B256_H512_P3_X8_R4_C1_gLN_causal0_sigmoid_epoch100_half1_norm3_bs16_worker16_sgd_lr1e-3_mmt0_l20.01_losssisnr_train/epoch98.pth.tar"
+# continue_from="/share/mini1/usr/will/sw/Conv-TasNet/egs/reverb_cs210/exp/train_r16000_N512_L80_B256_H512_P3_X8_R4_C1_gLN_causal0_sigmoid_epoch100_half1_norm3_bs16_worker16_sgd_lr1e-2_mmt0_l20.01_lossmse_train/epoch4.pth.tar"
 print_freq=10
 visdom=0
 visdom_epoch=0
@@ -113,7 +117,7 @@ figures=True
 corpus=cs21
 array=simu_non_uniform
 multichannel=False
-mix_label="reverb_ref"
+mix_label="noreverb_ref"
 
 # -- END Conv-TasNet Config
 
@@ -143,7 +147,7 @@ if [ $stage -le 1 ]; then
 fi
 
 if [ -z ${tag} ]; then
-  expdir=exp/train_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_loss${loss}_`basename $train_dir`
+  expdir=exp/${model}_${mix_label}_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_loss${loss}_`basename $train_dir`
 else
   expdir=exp/train_${tag}
 fi
@@ -158,7 +162,8 @@ if [ $stage -le 2 ]; then
     --train_dir $train_dir \
     --valid_dir $valid_dir \
     --sample_rate $sample_rate \
-    --segment $segment \
+    --segments $segments \
+    --stops $stops \
     --cv_maxlen $cv_maxlen \
     --N $N \
     --L $L \
@@ -198,7 +203,7 @@ if [ $stage -le 2 ]; then
     --loss $loss \
     >> $expdir/train.log
 fi
-
+exit
 
 
 # if [ $stage -le 3 ]; then

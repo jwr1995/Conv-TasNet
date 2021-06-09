@@ -7,10 +7,6 @@ import torch
 import torch as th
 import torch.nn as nn
 
-def remove_dc(data):
-    mean = torch.mean(data, -1, keepdim=True)
-    data = data - mean
-    return data
 
 def si_snr(s1, s2, eps=1e-8):
     # s1 = remove_dc(s1)
@@ -29,7 +25,6 @@ def sisnr_rms_loss(s1, s2, eps=1e-8, l=0.75):
     rms_s1 = torch.sqrt(torch.mean(torch.square(s1)))
     rms_s2 = torch.sqrt(torch.mean(torch.square(s2)))
     return (-l*sisnr + (1.0-l)*torch.log10(torch.square(rms_s1-rms_s2)))
-
 
 def l2_norm(s1, s2):
     #norm = torch.sqrt(torch.sum(s1*s2, 1, keepdim=True))

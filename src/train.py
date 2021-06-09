@@ -12,6 +12,7 @@ mp.set_sharing_strategy("file_system")
 from data import AudioDataLoader, AudioDataset
 from solver import Solver
 from conv_tasnet import ConvTasNet
+from tasnet import TasNet
 #from multi_conv_tasnet import MultiConvTasNet
 
 torch.backends.cudnn.benchmark = False
@@ -22,6 +23,7 @@ parser = argparse.ArgumentParser(
 # Task related
 
 bool_string = lambda the_string : True if the_string == 'True' else False
+int_array_string = lambda the_string: [int(s) for s in the_string.split(',')]
 
 parser.add_argument('--train_dir', type=str, default=None,
                     help='directory including mix.json, s1.json and s2.json')
@@ -29,7 +31,9 @@ parser.add_argument('--valid_dir', type=str, default=None,
                     help='directory including mix.json, s1.json and s2.json')
 parser.add_argument('--sample_rate', default=16000, type=int,
                     help='Sample rate')
-parser.add_argument('--segment', default=4, type=float,
+parser.add_argument('--segments', default='4', type=int_array_string,
+                    help='Segment length (seconds)')
+parser.add_argument('--stops', default='', type=int_array_string,
                     help='Segment length (seconds)')
 parser.add_argument('--cv_maxlen', default=8, type=float,
                     help='max audio length (seconds) in cv, to avoid OOM issue.')
@@ -52,10 +56,11 @@ parser.add_argument('--C', default=1, type=int,
                     help='Number of speakers')
 parser.add_argument('--norm_type', default='gLN', type=str,
                     choices=['gLN', 'cLN', 'BN'], help='Layer norm type')
-parser.add_argument('--causal', type=int, default=0,
+parser.add_argument('--causal', type=bool_string, default=False,
                     help='Causal (1) or noncausal(0) training')
 parser.add_argument('--mask_nonlinear', default='relu', type=str,
                     choices=['relu', 'softmax','sigmoid'], help='non-linear to generate mask')
+# parser.add_argument('--encoder_nonlinear',default='relu',type=str)
 # Training config
 parser.add_argument('--use_cuda', type=int, default=1,
                     help='Whether use GPU')
@@ -111,31 +116,35 @@ parser.add_argument('--mix-label',default='mix',type=str)
 parser.add_argument('--rms-dir',default=None,type=str)
 parser.add_argument('--loss',default='sisnr',type=str)
 parser.add_argument('--num_channels',default=1,type=int)
-parser.add_argument('--depth',default=1,type=int)
+parser.add_argument('--depth',default=1,type=int, help="Encoder depth: 1 or 2")
+parser.add_argument('--model',default="convtasnet",help="TasNet models available",choices=["convtasnet","tasnet"])
 
 def main(args):
     # Construct Solver
     # data
     tr_dataset = AudioDataset(args.train_dir, args.batch_size, args=args,
                               sample_rate=args.sample_rate,
-                              segment=args.segment, mode=args.mode,
+                              segments=args.segments, stops=args.stops, mode=args.mode,
                               mix_label=args.mix_label)
     cv_dataset = AudioDataset(args.valid_dir, batch_size=1, args=args,  # 1 -> use less GPU memory to do cv
                               sample_rate=args.sample_rate,
-                              segment=-1, cv_maxlen=args.cv_maxlen,
+                              segments=[-1]*2, stops=[args.epochs], cv_maxlen=args.cv_maxlen,
                               mode=args.mode, mix_label=args.mix_label)  # -1 -> use full audio
     tr_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
                                 dataset=tr_dataset, batch_size=1,
                                 shuffle=args.shuffle,
-                                num_workers=args.num_workers,rms_dir=args.rms_dir)
+                                num_workers=args.num_workers)
     cv_loader = AudioDataLoader(multichannel=args.multichannel, subtract=args.subtract,
                                 dataset=cv_dataset, batch_size=1,
-                                num_workers=0,rms_dir=args.rms_dir)
+                                num_workers=0)
     data = {'tr_loader': tr_loader, 'cv_loader': cv_loader}
     # model
     #if args.multichannel == False:
-    model = ConvTasNet(N=args.N, L=args.L, B=args.B, H=args.H, P=args.P, X=args.X, R=args.R,
+    if args.model == "convtasnet":
+        model = ConvTasNet(N=args.N, L=args.L, B=args.B, H=args.H, P=args.P, X=args.X, R=args.R,
                        C=args.C, causal=args.causal, depth=args.depth, num_channels=args.num_channels)
+    elif args.model == "tasnet":
+        model = TasNet(N=args.N, L=args.L, X=args.X, R=args.R, C=args.C, nchan=args.num_channels, bidirectional= not args.causal)
     # else:
     #     model = MultiConvTasNet(args.N,args.L, args.B, args.H, args.P, args.X, args.R,
     #                    args.C, norm_type=args.norm_type, causal=args.causal,
